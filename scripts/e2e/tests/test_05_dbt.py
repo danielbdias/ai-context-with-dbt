@@ -12,7 +12,7 @@ from collections import Counter
 
 import pytest
 
-from scripts.e2e.helpers import ENV, ch_query, pg_query, run_dbt
+from scripts.e2e.helpers import ENV, ch_command, ch_query, pg_query, run_dbt
 from scripts.e2e.payloads import EXPECTED_WORD_COUNTS, STOPWORDS_PRESENT
 
 BROWSERS = {"Chrome": "Chrome", "Firefox": "Firefox", "Mobile Safari": "Safari"}
@@ -62,6 +62,32 @@ def test_staging_flags_the_deleted_row(dbt_build: None) -> None:
         "SELECT count(), countIf(is_deleted) FROM staging.stg_app__submissions"
     )[0]
     assert (total, deleted) == (7, 1)
+
+
+def test_staging_ignores_an_older_deleted_duplicate(dbt_build: None) -> None:
+    """Regression: argMax skips NULLs, so a stale deleted version won the dedup.
+
+    Staging is a view, so a raw row inserted here shows up without a rebuild.
+    """
+    live_id = ch_query(
+        "SELECT max(submission_id) FROM staging.stg_app__submissions"
+        " WHERE NOT is_deleted"
+    )[0][0]
+    stale = "updated_at - INTERVAL 1 DAY"
+    ch_command(
+        "INSERT INTO raw.submissions SELECT * REPLACE ("
+        f"{stale} AS updated_at, {stale} AS deleted_at, 'e2e-stale' AS _dlt_id)"
+        f" FROM raw.submissions WHERE id = {live_id}"
+    )
+    try:
+        rows = ch_query(
+            "SELECT is_deleted FROM staging.stg_app__submissions"
+            f" WHERE submission_id = {live_id}"
+        )
+        assert rows == [(0,)]
+    finally:
+        ch_command("DELETE FROM raw.submissions WHERE _dlt_id = 'e2e-stale'")
+    assert ch_query("SELECT count() FROM raw.submissions")[0][0] == 7
 
 
 def test_distributions_match_live_postgres_rows(dbt_build: None) -> None:

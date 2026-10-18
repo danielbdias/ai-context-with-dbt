@@ -9,7 +9,7 @@ implements and maintains the suites.
 |---|---|---|---|
 | Unit | UA mapping, CSRF, validation, rate window, EL settings and config, bundle rendering, dbt description coverage script | `task test` | No |
 | Integration | Web writes against real Postgres, dlt merge against real Postgres and ClickHouse (`@pytest.mark.integration`) | `task up && task test:integration` | Yes (dev stack) |
-| dbt tests | Generic, custom and unit tests (tokens, accents, stopwords), source freshness (warn only), 100% description coverage | `task dbt:build`, `task dbt:test`, `task dbt:freshness`, `task dbt:coverage` | Yes |
+| dbt tests | Generic, custom and unit tests (staging dedup, tokens, accents, stopwords), source freshness (warn only), 100% description coverage | `task dbt:build`, `task dbt:test`, `task dbt:freshness`, `task dbt:coverage` | Yes |
 | Board validation | `dct validate` (static in `task lint`, with `--warehouse` in `charts:validate`) | `task charts:validate` | Yes |
 | E2E | The whole chain from empty volumes, in an isolated compose project | `task e2e` | Yes |
 
@@ -56,6 +56,7 @@ A change is done when all of these hold:
 | 5 | EL twice, `uniqExact(id)` = 6 both times | `test_04_el.py::test_el_is_idempotent` |
 | 6 | Soft delete plus 7th row, raw has 7 ids | `test_04_el.py::test_soft_delete_and_new_row_propagate` |
 | 6 | Staging `is_deleted` correct | `test_05_dbt.py::test_staging_flags_the_deleted_row` |
+| 6 | A stale deleted duplicate in raw does not win the dedup | `test_05_dbt.py::test_staging_ignores_an_older_deleted_duplicate` |
 | 7 | `dbt build` exits 0 | `test_05_dbt.py::test_dbt_build_succeeds` |
 | 7 | `dbt docs generate` exits 0 | `test_05_dbt.py::test_dbt_docs_generate_succeeds` |
 | 8 | Browser and OS counts match, deleted row excluded | `test_05_dbt.py::test_distributions_match_live_postgres_rows` |
@@ -76,6 +77,9 @@ Beyond the plan: grants for `web_writer`, `el_loader` and `dbt_runner`, the
 `updated_at` trigger, the Superset import and chart data API, the secret grep
 over the Superset bundle, the CSP headers, and the documented
 `show --select` denial.
+
+dbt 2.0.8 unit tests on ClickHouse do not flag mismatches in boolean or NULL
+expectations (found in M10), so those checks live in e2e.
 
 ### Gaps found and filled in M9
 

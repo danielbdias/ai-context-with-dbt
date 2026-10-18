@@ -8,7 +8,8 @@ with latest as (
         argMax(os_family, updated_at) as raw_os_family,
         argMax(created_at, updated_at) as first_created_at,
         max(updated_at) as last_updated_at,
-        argMax(deleted_at, updated_at) as latest_deleted_at
+        -- argMax skips NULLs: the tuple keeps an un-delete (NULL) as latest.
+        argMax(tuple(deleted_at), updated_at).1 as latest_deleted_at
     from {{ source('app', 'submissions') }}
     group by id
 )

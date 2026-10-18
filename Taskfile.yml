@@ -30,7 +30,7 @@ tasks:
       - task: env
       # The ClickHouse ADBC driver is baked into the image at build time, so
       # there is nothing to download on first use.
-      - docker compose --profile dbt build dbt
+      - docker compose --profile core --profile dbt build dbt
 
   env:
     desc: Create .env from .env.example with random secrets if missing

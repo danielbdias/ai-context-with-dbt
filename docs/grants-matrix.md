@@ -74,10 +74,12 @@ Notes:
   (those never reach ClickHouse).
 - The table-level grant for `superset_reader` is accepted before the table
   exists and survives drop and recreate.
-- Not granted yet, to be proven by spikes: `information_schema.*` and
-  `CREATE DATABASE` for dbt, and `system.tables`/`system.columns` for readers
-  (M7 and M8). Add them to `01-access.sh` only when a spike shows they are
-  needed.
+- Proven in M6: dbt v2 (`build`, `source freshness`, `docs generate`, `show`)
+  runs with exactly the grants above. It needs no `information_schema.*` and no
+  `CREATE DATABASE` for `dbt_runner`, so none were added.
+- Not granted yet, to be proven by spikes: `system.tables`/`system.columns` for
+  readers (M7 and M8). Add them to `01-access.sh` only when a spike shows they
+  are needed.
 
 ### Settings profile `reader` (`mcp_reader`, `charts_reader`, `superset_reader`)
 

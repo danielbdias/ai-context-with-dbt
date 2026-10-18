@@ -23,8 +23,10 @@ project. The suite is marked `e2e` and is excluded from `task test`.
 | `test_02_access.py` | Grants matrix |
 | `test_03_submissions.py` | Web app writes and rejections |
 | `test_04_el.py` | dlt: idempotent reruns, soft delete, no aux tables, fails when ClickHouse is down |
+| `test_05_dbt.py` | dbt v2 build and docs generate, mart counts and word frequencies vs Postgres |
 
-`run_el(env=None)` builds and runs the EL one-shot (profile `el` is not in
+`run_dbt(*args)` does the same for the dbt one-shot (profile `dbt`, artifacts in
+`target/e2e`). `run_el(env=None)` builds and runs the EL one-shot (profile `el` is not in
 `E2E_PROFILES`: `up --wait` must not start a one-shot) and returns the process.
 
 ## Add a stage

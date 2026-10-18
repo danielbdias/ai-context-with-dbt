@@ -5,6 +5,13 @@ dotenv: [".env"]
 vars:
   # Compose profiles started by `up`. Later milestones extend this list.
   PROFILES: core,app
+  # One-shot dbt container. `--build` is a cheap cache hit when nothing changed.
+  DBT: docker compose --profile core --profile dbt run --rm --build dbt
+  # Build/parse target (dev, ci, mcp, charts) and an optional artifacts dir.
+  TARGET: '{{.TARGET | default "dev"}}'
+  TARGET_PATH: '{{.TARGET_PATH | default ""}}'
+  TARGET_FLAGS: >-
+    --target {{.TARGET}}{{if .TARGET_PATH}} --target-path {{.TARGET_PATH}}{{end}}
   # Compose profiles started by `e2e`. Later milestones extend this list.
   E2E_PROFILES: core,app
   # `env` makes the e2e values win over the dev .env that task loads.
@@ -20,7 +27,9 @@ tasks:
       - asdf current python uv task
       - uv sync --all-packages
       - task: env
-    # TODO: warm the dbt ADBC driver (`dbt debug`) once transform/dbt exists.
+      # The ClickHouse ADBC driver is baked into the image at build time, so
+      # there is nothing to download on first use.
+      - docker compose --profile dbt build dbt
 
   env:
     desc: Create .env from .env.example with random secrets if missing
@@ -65,9 +74,60 @@ tasks:
     cmds:
       - docker compose --profile core --profile el run --rm --build el
 
-  lint:
-    desc: Ruff check, format check and lockfile check
+  dbt:build:
+    desc: "dbt build (seeds, models, tests), e.g. task dbt:build -- --select mart_word_frequencies+"
+    deps: [env]
     cmds:
+      - '{{.DBT}} build {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
+
+  dbt:run:
+    desc: dbt run (models only)
+    deps: [env]
+    cmds:
+      - '{{.DBT}} run {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
+
+  dbt:test:
+    desc: dbt test (data and unit tests)
+    deps: [env]
+    cmds:
+      - '{{.DBT}} test {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
+
+  dbt:freshness:
+    desc: Source freshness (warn only)
+    deps: [env]
+    cmds:
+      - '{{.DBT}} source freshness {{.TARGET_FLAGS}}'
+
+  dbt:parse:
+    desc: "dbt parse, e.g. task dbt:parse TARGET=charts TARGET_PATH=target/charts"
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile dbt run --rm --no-deps --build dbt parse {{.TARGET_FLAGS}}
+
+  dbt:debug:
+    desc: Check the profile and the ClickHouse connection
+    deps: [env]
+    cmds:
+      - '{{.DBT}} debug {{.TARGET_FLAGS}}'
+
+  dbt:docs:
+    desc: Generate the docs site and serve it on http://127.0.0.1:${DBT_DOCS_PORT:-8081}
+    deps: [env]
+    cmds:
+      - '{{.DBT}} docs generate {{.TARGET_FLAGS}}'
+      - docker compose --profile core --profile dbt run --rm --service-ports dbt docs serve --no-open
+
+  dbt:coverage:
+    desc: Fail when a dbt model, seed, source or column has no description
+    deps: [env]
+    cmds:
+      - task: dbt:parse
+      - uv run python -m scripts.check_dbt_descriptions
+
+  lint:
+    desc: Ruff check, format check, lockfile check and dbt description coverage
+    cmds:
+      - task: dbt:coverage
       - uv run ruff check .
       - uv run ruff format --check .
       - uv lock --check

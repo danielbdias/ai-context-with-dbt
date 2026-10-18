@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: stg_app__submissions
+    description: >
+      Cleaned submissions. Grain is one row per submission id, including
+      soft-deleted rows (see is_deleted). Deduplicates the raw table with argMax
+      on updated_at and maps ua-parser families to a small closed set of
+      browsers and operating systems through the seeds. Answers
+      "what is the latest state of submission N" and "which rows were deleted".
+      Marts read from here, agents should query marts instead. Example:
+      {% raw %}dbt show --inline "select browser, count() from {{ ref('fct_submissions') }} group by browser"{% endraw %}
+    columns:
+      - name: submission_id
+        description: Submission id from Postgres. Unique in this model.
+        data_tests: [unique, not_null]
+      - name: message
+        description: Free text typed by the visitor, latest version.
+      - name: browser
+        description: >
+          Normalized browser. One of Chrome, Firefox, Safari, Edge, Opera or
+          Other. Mobile variants fold into their desktop family.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Chrome, Firefox, Safari, Edge, Opera, Other]
+      - name: os
+        description: >
+          Normalized operating system. One of Windows, macOS, Linux, iOS,
+          Android or Other.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Windows, macOS, Linux, iOS, Android, Other]
+      - name: created_at
+        description: When the submission was created (UTC).
+      - name: updated_at
+        description: Last change of the submission in Postgres (UTC).
+      - name: deleted_at
+        description: When the submission was soft-deleted (UTC), or NULL if it is live.
+      - name: is_deleted
+        description: True when deleted_at is set. Downstream models drop these rows.

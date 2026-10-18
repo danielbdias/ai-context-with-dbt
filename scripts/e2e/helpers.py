@@ -121,6 +121,27 @@ def run_el(
     return compose("run", "--rm", "-T", *flags, "el", profiles=profiles, check=False)
 
 
+def run_dbt(*args: str) -> subprocess.CompletedProcess[str]:
+    """Run the dbt one-shot (building it first) and return the finished process.
+
+    Artifacts go to `target/e2e` so the dev stack's `target/` stays untouched.
+    Never raises on a non-zero exit: callers assert on `returncode`.
+    """
+    profiles = ("core", "dbt")
+    compose("build", "dbt", profiles=profiles)
+    return compose(
+        "run",
+        "--rm",
+        "-T",
+        "-e",
+        "DBT_TARGET_PATH=target/e2e",
+        "dbt",
+        *args,
+        profiles=profiles,
+        check=False,
+    )
+
+
 def container_health() -> dict[str, str]:
     """Map compose service name to its health status (or state if no check)."""
     out = compose("ps", "--all", "--format", "{{.Service}} {{.Health}}").stdout

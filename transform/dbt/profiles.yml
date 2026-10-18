@@ -1,0 +1,35 @@
+# Every value comes from the environment, so no secret lives in git.
+# Targets resolve refs identically. They differ only in who connects:
+#   dev, ci  -> dbt_runner (builds staging and marts)
+#   mcp      -> mcp_reader (read-only, marts)
+#   charts   -> charts_reader (read-only, marts)
+aictx:
+  target: dev
+  outputs:
+    dev: &runner
+      type: clickhouse
+      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('CLICKHOUSE_HTTP_PORT') | as_number }}"
+      user: dbt_runner
+      password: "{{ env_var('CLICKHOUSE_DBT_RUNNER_PASSWORD') }}"
+      schema: staging
+      threads: 4
+    ci: *runner
+    mcp:
+      type: clickhouse
+      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('CLICKHOUSE_HTTP_PORT') | as_number }}"
+      user: mcp_reader
+      password: "{{ env_var('CLICKHOUSE_MCP_READER_PASSWORD', '') }}"
+      schema: marts
+      check_exchange: false
+      threads: 2
+    charts:
+      type: clickhouse
+      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('CLICKHOUSE_HTTP_PORT') | as_number }}"
+      user: charts_reader
+      password: "{{ env_var('CLICKHOUSE_CHARTS_READER_PASSWORD', '') }}"
+      schema: marts
+      check_exchange: false
+      threads: 2

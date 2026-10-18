@@ -1,0 +1,60 @@
+version: 2
+
+seeds:
+  - name: browser_family_map
+    description: >
+      Lookup from the browser family that ua-parser stores in the app to the
+      six browser names used in analytics. Grain is one row per raw family.
+      Families that are not listed become Other in stg_app__submissions.
+    config:
+      column_types:
+        raw_family: String
+        browser_family: String
+    columns:
+      - name: raw_family
+        description: Browser family as reported by ua-parser, for example Mobile Safari.
+        data_tests: [unique, not_null]
+      - name: browser_family
+        description: Normalized browser, one of Chrome, Firefox, Safari, Edge or Opera.
+        data_tests: [not_null]
+
+  - name: os_family_map
+    description: >
+      Lookup from the OS family that ua-parser stores in the app to the six OS
+      names used in analytics. Grain is one row per raw family. Families that
+      are not listed become Other in stg_app__submissions.
+    config:
+      column_types:
+        raw_family: String
+        os_family: String
+    columns:
+      - name: raw_family
+        description: OS family as reported by ua-parser, for example Mac OS X.
+        data_tests: [unique, not_null]
+      - name: os_family
+        description: Normalized OS, one of Windows, macOS, Linux, iOS or Android.
+        data_tests: [not_null]
+
+  - name: stopwords_pt
+    description: >
+      Common Portuguese stopwords in natural spelling, with accents. They are
+      folded in SQL by normalize_token before use, so the spelling here is free.
+    config:
+      column_types:
+        word: String
+    columns:
+      - name: word
+        description: A Portuguese stopword in natural spelling.
+        data_tests: [not_null]
+
+  - name: stopwords_en
+    description: >
+      Common English stopwords in natural spelling. They are folded in SQL by
+      normalize_token before use.
+    config:
+      column_types:
+        word: String
+    columns:
+      - name: word
+        description: An English stopword in natural spelling.
+        data_tests: [not_null]

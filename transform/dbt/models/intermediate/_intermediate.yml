@@ -1,0 +1,95 @@
+version: 2
+
+models:
+  - name: int_submission_tokens
+    description: >
+      Ephemeral. Grain is one row per word occurrence in a live message. Words
+      are split on letters, lowercased, folded (accents removed) and kept only
+      when they have at least 3 characters and are not a Portuguese or English
+      stopword. display_word keeps the lowercase accented form for display.
+      It feeds mart_word_frequencies. Apostrophes split words, so don't becomes
+      don and t, and short pieces are dropped.
+    columns:
+      - name: submission_id
+        description: Id of the submission the word came from.
+      - name: word
+        description: Folded word (lowercase, no accents). Use it to group.
+      - name: display_word
+        description: Lowercase original spelling of the word, with accents.
+
+unit_tests:
+  - name: test_tokens_portuguese_with_accents_and_stopwords
+    description: Portuguese text keeps content words and drops stopwords and short words.
+    model: int_submission_tokens
+    given:
+      - input: ref('stg_app__submissions')
+        rows:
+          - {submission_id: 1, message: "Adoro café com dados abertos, que bom", is_deleted: false}
+      - input: ref('stopwords_pt')
+        rows:
+          - {word: com}
+          - {word: que}
+      - input: ref('stopwords_en')
+        rows:
+          - {word: the}
+    expect:
+      rows:
+        - {submission_id: 1, word: adoro, display_word: adoro}
+        - {submission_id: 1, word: cafe, display_word: café}
+        - {submission_id: 1, word: dados, display_word: dados}
+        - {submission_id: 1, word: abertos, display_word: abertos}
+        - {submission_id: 1, word: bom, display_word: bom}
+
+  - name: test_tokens_english_drops_stopwords_and_short_words
+    description: English text drops stopwords and tokens under 3 characters.
+    model: int_submission_tokens
+    given:
+      - input: ref('stg_app__submissions')
+        rows:
+          - {submission_id: 2, message: "The pipeline is OK, we go", is_deleted: false}
+      - input: ref('stopwords_pt')
+        rows:
+          - {word: de}
+      - input: ref('stopwords_en')
+        rows:
+          - {word: the}
+          - {word: is}
+    expect:
+      rows:
+        - {submission_id: 2, word: pipeline, display_word: pipeline}
+
+  - name: test_tokens_fold_cafe_and_skip_deleted_rows
+    description: Café and cafe fold to the same word and deleted rows yield nothing.
+    model: int_submission_tokens
+    given:
+      - input: ref('stg_app__submissions')
+        rows:
+          - {submission_id: 3, message: "Café CAFE", is_deleted: false}
+          - {submission_id: 4, message: "ignored words", is_deleted: true}
+      - input: ref('stopwords_pt')
+        rows:
+          - {word: de}
+      - input: ref('stopwords_en')
+        rows:
+          - {word: the}
+    expect:
+      rows:
+        - {submission_id: 3, word: cafe, display_word: café}
+        - {submission_id: 3, word: cafe, display_word: cafe}
+
+  - name: test_tokens_stopwords_match_after_folding
+    description: A stopword written with an accent also removes its unaccented form.
+    model: int_submission_tokens
+    given:
+      - input: ref('stg_app__submissions')
+        rows:
+          - {submission_id: 5, message: "Então entao verdade", is_deleted: false}
+      - input: ref('stopwords_pt')
+        rows:
+          - {word: então}
+      - input: ref('stopwords_en')
+        rows:
+          - {word: the}
+    expect:
+      rows:
+        - {submission_id: 5, word: verdade, display_word: verdade}

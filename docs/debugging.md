@@ -35,7 +35,7 @@ SELECT table FROM (SELECT name AS table FROM system.tables WHERE database = 'raw
 
 - `count()` above `uniqExact(id)` is normal between merges only if a run
   failed midway. Rerun `task el`.
-- dlt writes merge staging tables as `raw.stg___*`, not into `raw_staging`.
+- dlt writes merge staging tables as `raw.stg___*` in the same database.
 
 ### dbt
 

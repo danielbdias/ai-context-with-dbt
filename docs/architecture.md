@@ -19,16 +19,16 @@ flowchart LR
   MCP -->|mcp_reader, show --inline| MRT
 ```
 
-The `raw_staging` database from the original plan is created but unused.
-dlt writes its merge staging tables next to the target, as `raw.stg___*`
-(owned by `el_loader`).
+dlt's ClickHouse destination uses a single database, so its merge staging
+tables sit next to the target as `raw.stg___*` (owned by `el_loader`). The
+plan's separate `raw_staging` database was dropped as unused.
 
 ## Components
 
 | Component | Image | Compose profile | Responsibility |
 |---|---|---|---|
 | postgres | `postgres:18.6` | core | App OLTP database `app` and Superset metadata database `superset` |
-| clickhouse | `clickhouse-server:26.3.54.6` | core | `raw`, `staging`, `marts` (and unused `raw_staging`) |
+| clickhouse | `clickhouse-server:26.3.54.6` | core | `raw`, `staging`, `marts` |
 | migrate | web image | app | Alembic one-shot |
 | web | web image (FastAPI + Jinja2) | app | The form, UA parsing, CSRF, rate limit, 3-table insert |
 | el | el image (dlt 1.31) | el | Incremental merge of `app.submissions` into `raw.submissions` |
@@ -48,8 +48,9 @@ dlt writes its merge staging tables next to the target, as `raw.stg___*`
 3. `task dbt:build` deduplicates raw with `argMax` in
    `staging.stg_app__submissions`, tokenizes messages in SQL, and builds the
    `marts` tables. Every model and column has a description for agents.
-4. Readers (`charts_reader`, `superset_reader`, `mcp_reader`) can SELECT
-   `marts` only, under the `reader` profile (`readonly=2` with locked limits).
+4. Readers (`charts_reader`, `mcp_reader`) can SELECT `marts` only, and
+   `superset_reader` only `marts.mart_word_frequencies`, all under the
+   `reader` profile (`readonly=2` with locked limits).
 5. dbt Charts reads the manifest built by `dbt parse --target charts`.
    Claude queries marts through `show --inline`.
 

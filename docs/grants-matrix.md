@@ -49,14 +49,14 @@ v2 has no `grants:` support, so this is also the only option.
 `select_from_system_db_requires_grant` and
 `select_from_information_schema_requires_grant` are on (`config.d`).
 
-| User | raw | raw_staging | staging | marts | system tables |
-|---|---|---|---|---|---|
-| `default` | admin | admin | admin | admin | all (init and tests only) |
-| `el_loader` | CREATE TABLE, DROP TABLE, INSERT, SELECT, ALTER, TRUNCATE | same | none | none | SELECT `tables`, `columns`, `databases`, `INFORMATION_SCHEMA.COLUMNS` |
-| `dbt_runner` | SELECT | none | CREATE TABLE/VIEW, DROP TABLE/VIEW, INSERT, SELECT, ALTER, TRUNCATE | same as staging | SELECT `tables`, `columns`, `databases`, `settings`, `functions` |
-| `mcp_reader` | none | none | none | SELECT | none |
-| `charts_reader` | none | none | none | SELECT | none |
-| `superset_reader` | none | none | none | SELECT on `marts.mart_word_frequencies` only | none |
+| User | raw | staging | marts | system tables |
+|---|---|---|---|---|
+| `default` | admin | admin | admin | all (init and tests only) |
+| `el_loader` | CREATE TABLE, DROP TABLE, INSERT, SELECT, ALTER, TRUNCATE | none | none | SELECT `tables`, `columns`, `databases`, `INFORMATION_SCHEMA.COLUMNS` |
+| `dbt_runner` | SELECT | CREATE TABLE/VIEW, DROP TABLE/VIEW, INSERT, SELECT, ALTER, TRUNCATE | same as staging | SELECT `tables`, `columns`, `databases`, `settings`, `functions` |
+| `mcp_reader` | none | none | SELECT | none |
+| `charts_reader` | none | none | SELECT | none |
+| `superset_reader` | none | none | SELECT on `marts.mart_word_frequencies` only | none |
 
 Notes:
 - `ALTER` for `el_loader` covers `ADD COLUMN` (dlt schema evolution) and
@@ -66,9 +66,10 @@ Notes:
 - dlt's ClickHouse destination uses ONE database per pipeline, so it puts
   merge staging tables next to the final table: `raw.submissions` plus
   `raw.stg___submissions` (and its own `raw.stg____dlt_version`,
-  `raw.stg___dlt_sentinel_table`). `raw_staging` stays created and granted but
-  dlt does not use it. Merge runs `DELETE FROM raw.submissions WHERE id IN
-  (...)` (lightweight delete, synchronous by default), covered by `ALTER`.
+  `raw.stg___dlt_sentinel_table`). No separate staging database exists (the
+  plan's `raw_staging` was dropped as unused). Merge runs `DELETE FROM
+  raw.submissions WHERE id IN (...)` (lightweight delete, synchronous by
+  default), covered by `ALTER`.
 - `system.tables` and `system.columns` only list objects the user can see, so
   `dbt_runner` and `el_loader` never see `request_metadata` or `auth_attempts`
   (those never reach ClickHouse).
@@ -125,3 +126,4 @@ Examples:
 | `CREATE TABLE marts.<t> ...` | `el_loader` | denied |
 | `CREATE TABLE marts.<t> ...` | `dbt_runner` | allowed |
 | `INSERT INTO raw.<t> ...` | `dbt_runner` | denied |
+| `CREATE DATABASE ...` | `el_loader`, `dbt_runner` | denied |

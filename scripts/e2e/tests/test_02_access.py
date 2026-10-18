@@ -160,8 +160,8 @@ def mart_probe() -> Iterator[str]:
 
 @pytest.fixture
 def other_db_probes() -> Iterator[list[str]]:
-    """Existing tables in raw/staging/raw_staging, so denials are not 'unknown'."""
-    names = [f"{db}.e2e_probe_other" for db in ("raw", "raw_staging", "staging")]
+    """Existing tables in raw and staging, so denials are not 'unknown'."""
+    names = [f"{db}.e2e_probe_other" for db in ("raw", "staging")]
     for name in names:
         ch_command(f"CREATE TABLE {name} (n UInt8) ENGINE = Memory")
     yield names
@@ -171,7 +171,8 @@ def other_db_probes() -> Iterator[list[str]]:
 
 def test_clickhouse_layout() -> None:
     databases = {n for (n,) in ch_query("SHOW DATABASES")}
-    assert {"raw", "raw_staging", "staging", "marts"} <= databases
+    assert {"raw", "staging", "marts"} <= databases
+    assert "raw_staging" not in databases
     users = {n for (n,) in ch_query("SELECT name FROM system.users")}
     assert {
         "el_loader",
@@ -252,8 +253,15 @@ def test_superset_reader_is_table_scoped(
         )
     try:
         assert ch_query(f"SELECT count() FROM {word_table}", **creds) is not None
-        ch_denied(f"SELECT * FROM {other_db_probes[0]}", "superset_reader")
-        ch_denied("SELECT * FROM system.query_log", "superset_reader")
+        for table in other_db_probes:
+            ch_denied(f"SELECT * FROM {table}", "superset_reader")
+        for sql in (
+            "SELECT * FROM system.query_log",
+            f"INSERT INTO {word_table} (word, frequency) VALUES ('x', 1)",
+            f"SELECT * FROM {word_table} SETTINGS max_result_rows = 0",
+            f"SELECT * FROM {word_table} SETTINGS max_execution_time = 600",
+        ):
+            ch_denied(sql, "superset_reader")
     finally:
         if not exists:
             ch_command(f"DROP TABLE IF EXISTS {word_table}", **dbt)
@@ -273,10 +281,6 @@ def test_el_loader_grants() -> None:
             **creds,
         )
         assert ch_query("SELECT count() FROM raw.e2e_probe", **creds) == [(0,)]
-        ch_command(
-            "CREATE TABLE raw_staging.e2e_probe (n UInt8) ENGINE = Memory", **creds
-        )
-        ch_command("DROP TABLE raw_staging.e2e_probe", **creds)
         tables = ch_query(
             "SELECT count() FROM system.tables WHERE database='raw'", **creds
         )
@@ -289,16 +293,18 @@ def test_el_loader_grants() -> None:
     for sql in (
         "CREATE TABLE marts.nope (n UInt8) ENGINE = Memory",
         "CREATE TABLE staging.nope (n UInt8) ENGINE = Memory",
+        "CREATE DATABASE nope",
         "SELECT * FROM system.query_log",
     ):
         with pytest.raises(ERRORS):
             ch_command(sql, **creds)
-    ch_command("CREATE TABLE marts.e2e_el_probe (n UInt8) ENGINE = Memory")
-    try:
-        with pytest.raises(ERRORS):
-            ch_query("SELECT * FROM marts.e2e_el_probe", **creds)
-    finally:
-        ch_command("DROP TABLE marts.e2e_el_probe")
+    for db in ("staging", "marts"):
+        ch_command(f"CREATE TABLE {db}.e2e_el_probe (n UInt8) ENGINE = Memory")
+        try:
+            with pytest.raises(ERRORS):
+                ch_query(f"SELECT * FROM {db}.e2e_el_probe", **creds)
+        finally:
+            ch_command(f"DROP TABLE {db}.e2e_el_probe")
 
 
 def test_dbt_runner_grants() -> None:
@@ -315,12 +321,6 @@ def test_dbt_runner_grants() -> None:
         ch_command("EXCHANGE TABLES marts.e2e_a AND marts.e2e_b", **creds)
         ch_command("DROP TABLE marts.e2e_a", **creds)
         ch_command("DROP TABLE marts.e2e_b", **creds)
-        ch_command("CREATE TABLE raw_staging.e2e_dbt_probe (n UInt8) ENGINE = Memory")
-        try:
-            with pytest.raises(ERRORS):
-                ch_query("SELECT * FROM raw_staging.e2e_dbt_probe", **creds)
-        finally:
-            ch_command("DROP TABLE raw_staging.e2e_dbt_probe")
         # Introspection used by the dbt adapter.
         for system_table in ("tables", "columns", "databases", "settings", "functions"):
             ch_query(f"SELECT count() FROM system.{system_table}", **creds)
@@ -329,6 +329,7 @@ def test_dbt_runner_grants() -> None:
             "CREATE TABLE raw.nope (n UInt8) ENGINE = Memory",
             "DROP TABLE raw.e2e_src",
             "ALTER TABLE raw.e2e_src DELETE WHERE 1",
+            "CREATE DATABASE nope",
             "SELECT * FROM system.query_log",
         ):
             with pytest.raises(ERRORS):

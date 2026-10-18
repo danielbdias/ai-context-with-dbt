@@ -9,7 +9,6 @@ sha256() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
 clickhouse-client --multiquery --host 127.0.0.1 \
   --user "${CLICKHOUSE_USER:-default}" --password "${CLICKHOUSE_PASSWORD:-}" <<SQL
 CREATE DATABASE raw;
-CREATE DATABASE raw_staging;
 CREATE DATABASE staging;
 CREATE DATABASE marts;
 
@@ -28,10 +27,10 @@ CREATE USER mcp_reader IDENTIFIED WITH sha256_hash BY '$(sha256 "$CLICKHOUSE_MCP
 CREATE USER charts_reader IDENTIFIED WITH sha256_hash BY '$(sha256 "$CLICKHOUSE_CHARTS_READER_PASSWORD")' SETTINGS PROFILE 'reader';
 CREATE USER superset_reader IDENTIFIED WITH sha256_hash BY '$(sha256 "$CLICKHOUSE_SUPERSET_READER_PASSWORD")' SETTINGS PROFILE 'reader';
 
--- el_loader (dlt): owns raw and raw_staging. ALTER covers ADD COLUMN for
--- schema evolution as well as ALTER DELETE/UPDATE for merges.
+-- el_loader (dlt): owns raw, including dlt's merge staging tables
+-- (raw.stg___*: dlt's ClickHouse destination uses one database). ALTER covers
+-- ADD COLUMN for schema evolution as well as ALTER DELETE/UPDATE for merges.
 GRANT CREATE TABLE, DROP TABLE, INSERT, SELECT, ALTER, TRUNCATE ON raw.* TO el_loader;
-GRANT CREATE TABLE, DROP TABLE, INSERT, SELECT, ALTER, TRUNCATE ON raw_staging.* TO el_loader;
 GRANT SELECT ON system.tables TO el_loader;
 GRANT SELECT ON system.columns TO el_loader;
 GRANT SELECT ON system.databases TO el_loader;

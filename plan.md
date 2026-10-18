@@ -450,3 +450,27 @@ Async tests use anyio.
 3. `task dashboard`: the dbt Charts overview and words boards render, and the linked Superset word cloud renders. No clicking needed.
 4. `task mcp:claude`, then in Claude Code ask "what are the top browsers?". The answer comes from `marts.mart_browser_distribution`, and `system.query_log` shows `mcp_reader`.
 5. `task e2e` is green twice in a row from `task reset`.
+
+## 11. Implementation notes and deviations (recorded at M10)
+
+Sections 1 to 10 are kept as approved. This table records where the build
+differs and why. Current behaviour is documented in `docs/` and the READMEs.
+
+| Area | Plan | As built | Why |
+|---|---|---|---|
+| FastAPI | 0.143.3 | `fastapi>=0.141.0,<0.142` (0.141.1) | dbt-mcp 2.7.0 pins FastAPI `<0.142` and shares the workspace lock |
+| clickhouse-connect | 1.11.0 everywhere | 1.11.0 in the workspace (dlt, tests); **0.15.1** in the Superset image | Superset 6.1.0's ClickHouse extra is `<1.0`. Own lock in `dashboard/superset` |
+| dlt staging | `raw_staging` database | Merge staging tables live in `raw` as `raw.stg___*`. The `raw_staging` database and its `el_loader` grants were **dropped** | dlt's ClickHouse destination uses one database per pipeline |
+| ADBC driver | Downloaded on first use, cached in volume `dbt_adbc`, warmed by `task setup` | Baked into the image with `dbt system install-drivers` (only ClickHouse and DuckDB kept). No `dbt_adbc` volume | Offline, faster starts, no first-run race |
+| dbt v2 connection | ADBC | ADBC over ClickHouse **HTTP 8123** | What the v2 adapter speaks |
+| dbt artifacts | `dbt_target` volume | Bind mount of `transform/dbt` (dev `target/`, charts `target/charts`, e2e `target/e2e*`) | Artifacts readable on the host; one less volume |
+| Semantic YAML | Conditional | New-spec semantic model on `fct_submissions` plus one metric and a time spine **parse** and land in the manifest, but **cannot execute** locally (no SL on v2 ClickHouse, needs the dbt platform) | See `docs/agent-guide.md` |
+| dbt v2 unit tests | Supported | Pass, but dbt 2.0.8 does not flag mismatches in boolean or NULL expectations on ClickHouse. Such checks live in e2e (e.g. the staging un-delete regression in `test_05_dbt.py`) | Found in M10 |
+| dbt Charts 0.9.1 | `target_path` on the source, `dct doctor` | No `target_path` and no `doctor`. It reads `<project>/target/manifest.json`, so the charts manifest is mounted at `/app/dbt/target` | 0.9.1 behaviour differs from its docs |
+| Charts query timeout | Reader profile caps at 30 s | `charts` target sets `custom_settings.max_execution_time: 30` | `dct` sends 120 s by default, which the reader profile rejects |
+| dbt-mcp launch | `docker compose run --rm -i dbt-mcp` | Needs `--profile core --profile mcp` (and `--no-TTY`) | The service depends on `clickhouse` (profile `core`) |
+| dbt-mcp artifacts | Own `target_mcp/` | `target_mcp/` plus the same tmpfs volume mounted at `target/` inside the container | `get_lineage_dev` hard-codes `target/manifest.json` |
+| Superset access | Open the word cloud with no clicking | Provisioned with no clicking, but viewing **requires login** as `admin` (`SUPERSET_ADMIN_PASSWORD`) | Anonymous/Public read access is a **pending user decision** |
+| Taskfile | `test` runs unit then integration; `lint` runs `charts:validate` | `test` (unit) and `test:integration` are separate; `lint` runs a static `dct validate` (`charts:lint`); `charts:validate` needs the warehouse | `task test` needs no Docker, and `task lint` needs no running warehouse |
+| Host Python | asdf `python 3.13.x` | 3.13.16. The asdf build on this host lacks `lzma` | Build Python with xz available if a tool needs `lzma` on the host; containers are unaffected |
+| ChatGPT | Out of scope | Out of scope | User decision (§9b) |

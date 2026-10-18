@@ -124,6 +124,55 @@ tasks:
       - task: dbt:parse
       - uv run python -m scripts.check_dbt_descriptions
 
+  mcp:build:
+    desc: Build the dbt-mcp image (Claude starts it over stdio, so build first)
+    deps: [env]
+    cmds:
+      # Mountpoints for the writable artifact volume inside the read-only project.
+      - mkdir -p transform/dbt/target transform/dbt/target_mcp
+      - docker compose --profile core --profile mcp build dbt-mcp
+
+  mcp:smoke:
+    desc: "Talk MCP to dbt-mcp over stdio: list tools, ask for the top browsers"
+    deps: [mcp:build]
+    cmds:
+      - uv run python scripts/mcp_smoke.py
+
+  mcp:claude:
+    desc: Build dbt-mcp and print the Claude Code and Claude Desktop setup
+    deps: [mcp:build]
+    silent: true
+    vars:
+      DOCKER_BIN:
+        sh: command -v docker
+    cmds:
+      - |
+        cat <<EOF
+        Claude Code: .mcp.json at the repo root registers server "dbt" (project
+        scope). Start \`claude\` from the repo root, approve the server, then
+        check it with \`claude mcp list\` or /mcp.
+
+        Claude Desktop: merge this into
+        ~/Library/Application Support/Claude/claude_desktop_config.json
+        (this task does not edit it), then restart Claude Desktop.
+
+        {
+          "mcpServers": {
+            "dbt": {
+              "command": "{{.DOCKER_BIN}}",
+              "args": [
+                "compose",
+                "-f", "{{.ROOT_DIR}}/docker-compose.yml",
+                "--project-directory", "{{.ROOT_DIR}}",
+                "--profile", "core", "--profile", "mcp",
+                "run", "--rm", "-i", "--no-TTY", "dbt-mcp"
+              ],
+              "env": {"PATH": "{{dir .DOCKER_BIN}}:/usr/bin:/bin"}
+            }
+          }
+        }
+        EOF
+
   lint:
     desc: Ruff check, format check, lockfile check and dbt description coverage
     cmds:

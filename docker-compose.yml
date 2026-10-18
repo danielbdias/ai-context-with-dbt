@@ -168,9 +168,47 @@ services:
     mem_limit: 1g
     networks: [backend]
 
+  dbt-mcp:
+    image: aictx-dbt-mcp:local
+    build:
+      context: .
+      dockerfile: transform/Dockerfile
+      target: dbt-mcp
+    profiles: [mcp]
+    # A stdio MCP server, started per session by the client:
+    #   docker compose --profile mcp run --rm -i --no-TTY dbt-mcp
+    # No ports. Only the read-only `mcp` target credentials are passed in.
+    stdin_open: true
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: "8123"
+      CLICKHOUSE_MCP_READER_PASSWORD: ${CLICKHOUSE_MCP_READER_PASSWORD}
+      DBT_MCP_LOG_LEVEL: ${DBT_MCP_LOG_LEVEL:-INFO}
+    volumes:
+      # The project is read-only. dbt writes only to target_mcp/. The same
+      # volume also backs target/ because dbt-mcp's get_lineage_dev reads
+      # target/manifest.json. Both host dirs must exist as mountpoints
+      # (`task mcp:build` creates them).
+      - ./transform/dbt:/app/transform/dbt:ro
+      - dbt_mcp_target:/app/transform/dbt/target_mcp
+      - dbt_mcp_target:/app/transform/dbt/target
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 512m
+    networks: [backend]
+
 networks:
   backend:
 
 volumes:
   pg_data:
   ch_data:
+  # In-memory and owned by the image's `app` user. Emptied when no dbt-mcp
+  # container uses it.
+  dbt_mcp_target:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "uid=10001,gid=10001,mode=0755,size=64m"

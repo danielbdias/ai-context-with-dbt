@@ -24,6 +24,22 @@ dbt show --inline "select browser, submissions_count, pct
 - Prefer a small, specific query over `select *` on `fct_submissions`, which
   holds free-text messages.
 
+### Through MCP (Claude)
+
+The dbt MCP server (`mcp/README.md`) exposes the same thing as the `show` tool.
+Pass the SQL as `sql_query` and the row cap as `limit` (default 5):
+
+```json
+{"sql_query": "select browser, submissions_count, pct from {{ ref('mart_browser_distribution') }} order by submissions_count desc", "limit": 10}
+```
+
+It returns JSON rows, e.g.
+`[{"browser":"Chrome","submissions_count":12,"pct":50.0}, ...]`. Same rules:
+no `LIMIT` in the SQL (if the word appears, the tool drops its own cap), and
+only marts. Other tools: `list`, `get_node_details_dev` (`node_id`),
+`get_lineage_dev` (`unique_id` such as `model.aictx.mart_browser_distribution`),
+`compile`, `parse`.
+
 ## Marts and the questions they answer
 
 | Model | Grain | Answers |
@@ -54,7 +70,7 @@ Example questions and queries:
 |---|---|
 | Descriptions, columns, tests | `get_node_details_dev`, or `target/manifest.json` |
 | Lineage | `get_lineage_dev` |
-| List models | `dbt ls` |
+| List models | `dbt ls` (MCP tool `list`) |
 | Rendered SQL of a model | `dbt compile --select <model>` (runs as the target user) |
 | Browse docs | `task dbt:docs`, then http://127.0.0.1:8081 |
 
@@ -97,3 +113,19 @@ Result: **parses, but cannot be validated or queried locally.**
 - Unit-test fixtures are typed `Nullable`, which ClickHouse arrays refuse, so
   `int_submission_tokens` wraps the message in `ifNull`.
 - `dbt docs serve` exists (`task dbt:docs`).
+
+## Example MCP session (M7)
+
+`task mcp:smoke` runs it without a GUI (`scripts/mcp_smoke.py`, the same
+command Claude uses):
+
+```text
+tools: compile, get_lineage_dev, get_node_details_dev, list, parse, show
+Q: what are the top browsers?
+  1. Chrome: 12 submissions (50.0%)
+  2. Firefox: 8 submissions (33.33%)
+  3. Safari: 4 submissions (16.67%)
+```
+
+`system.query_log` for that session (as admin) shows only `mcp_reader`, running
+`EXISTS DATABASE "marts"` and the `select ... from marts.mart_browser_distribution`.

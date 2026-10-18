@@ -77,9 +77,15 @@ Notes:
 - Proven in M6: dbt v2 (`build`, `source freshness`, `docs generate`, `show`)
   runs with exactly the grants above. It needs no `information_schema.*` and no
   `CREATE DATABASE` for `dbt_runner`, so none were added.
-- Not granted yet, to be proven by spikes: `system.tables`/`system.columns` for
-  readers (M7 and M8). Add them to `01-access.sh` only when a spike shows they
-  are needed.
+- Proven in M7: dbt v2 with `--target mcp` (`debug`, `parse`, `compile`,
+  `ls`, `show --inline`) and dbt-mcp run as `mcp_reader` with `SELECT ON
+  marts.*` alone. dbt issues only `EXISTS DATABASE "marts"` and the `SELECT`
+  itself, so readers get no system-table grants. The v1 profile key
+  `check_exchange: false` is accepted and parsed by v2 (`dbt debug` lists it).
+  It only matters when materializing tables, which readers never do.
+- Not granted yet, to be proven by a spike: `system.tables`/`system.columns`
+  for `charts_reader` (M8). Add them to `01-access.sh` only when a spike shows
+  they are needed.
 
 ### Settings profile `reader` (`mcp_reader`, `charts_reader`, `superset_reader`)
 

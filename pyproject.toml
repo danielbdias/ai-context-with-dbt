@@ -21,6 +21,7 @@ dev = [
     "anyio>=4.15.1",
     "clickhouse-connect>=1.11.0",
     "httpx>=0.28.1",
+    "mcp>=1.30.0",
     "psycopg[binary]>=3.3.6",
     "pytest>=9.1.1",
     "ruff>=0.17.1",
@@ -36,6 +37,10 @@ select = ["E", "F", "W", "I", "UP", "B", "ANN", "D", "S", "C4", "SIM", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106", "S107", "D"]
 "scripts/e2e/**" = ["S608", "D"]
+
+[tool.ruff.lint.isort]
+# The repo's `mcp/` folder holds client config, not Python: `mcp` is the SDK.
+known-third-party = ["mcp"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

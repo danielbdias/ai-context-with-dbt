@@ -50,17 +50,23 @@ def run_fresh(settings: Settings) -> None:
         pipeline.run_once(settings, pipelines_dir)
 
 
-def test_rerun_is_stable_and_new_rows_arrive(settings: Settings) -> None:
-    run_fresh(settings)
-    first = raw_ids(settings)
-    run_fresh(settings)
-    assert raw_ids(settings) == first
-    # Inserted already soft-deleted so it never shows up in marts.
-    new_id = pg_exec(
+def insert_deleted_row(settings: Settings) -> int:
+    """Insert a row already soft-deleted, so it never shows up in marts."""
+    return pg_exec(
         settings,
         "INSERT INTO app.submissions (message, browser_family, os_family, deleted_at)"
         " VALUES ('integration test', 'Other', 'Other', now()) RETURNING id",
     )[0][0]
+
+
+def test_rerun_is_stable_and_new_rows_arrive(settings: Settings) -> None:
+    # At least one source row, so dlt creates raw.submissions on a fresh stack.
+    insert_deleted_row(settings)
+    run_fresh(settings)
+    first = raw_ids(settings)
+    run_fresh(settings)
+    assert raw_ids(settings) == first
+    new_id = insert_deleted_row(settings)
     run_fresh(settings)
     after = raw_ids(settings)
     assert new_id in after

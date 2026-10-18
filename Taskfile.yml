@@ -1,0 +1,42 @@
+version: "3"
+
+tasks:
+  setup:
+    desc: Check toolchain, sync the uv workspace and create .env
+    cmds:
+      - asdf current python uv task
+      - uv sync --all-packages
+      - task: env
+    # TODO: warm the dbt ADBC driver (`dbt debug`) once transform/dbt exists.
+
+  env:
+    desc: Create .env from .env.example with random secrets if missing
+    status:
+      - test -f .env
+    cmds:
+      - |
+        while IFS= read -r line; do
+          while [[ "$line" == *change-me* ]]; do
+            line="${line/change-me/$(openssl rand -hex 16)}"
+          done
+          printf '%s\n' "$line"
+        done < .env.example > .env
+      - echo "Created .env"
+
+  lint:
+    desc: Ruff check, format check and lockfile check
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+      - uv lock --check
+
+  fmt:
+    desc: Auto-fix and format with ruff
+    cmds:
+      - uv run ruff check --fix .
+      - uv run ruff format .
+
+  test:
+    desc: Run unit tests (integration tests are deselected)
+    cmds:
+      - uv run pytest

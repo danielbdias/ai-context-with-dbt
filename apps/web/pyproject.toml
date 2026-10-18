@@ -1,0 +1,23 @@
+[project]
+name = "web"
+version = "0.1.0"
+description = "web member of the ai-context-with-dbt demo."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "alembic>=1.20.0",
+    "fastapi>=0.141.0,<0.142",
+    "jinja2>=3.1.6",
+    "psycopg-pool>=3.3.3",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.14.1",
+    "python-multipart>=0.0.32",
+    "ua-parser>=1.0.2",
+    "uvicorn>=0.38",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/web"]

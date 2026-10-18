@@ -220,15 +220,11 @@ def test_reader_limits_are_enforced() -> None:
         "('readonly', 'max_result_rows', 'max_execution_time')",
         **ch_user("mcp_reader"),
     )
-    assert (
-        dict(rows)
-        == {
-            "readonly": "2",
-            "max_result_rows": "10000",
-            "max_execution_time": "30",
-        }
-        or True
-    )
+    assert dict(rows) == {
+        "readonly": "2",
+        "max_result_rows": "10000",
+        "max_execution_time": "30",
+    }
 
 
 def test_reader_row_cap() -> None:

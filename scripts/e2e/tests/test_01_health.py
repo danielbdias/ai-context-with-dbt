@@ -23,3 +23,16 @@ def test_clickhouse_alive_and_memory_ratio() -> None:
         "WHERE name = 'max_server_memory_usage_to_ram_ratio'"
     )
     assert float(rows[0][0]) == 0.75
+
+
+def test_migrations_applied() -> None:
+    """Alembic is at a revision and the three app tables exist."""
+    assert pg_query("SELECT count(*) FROM app.alembic_version")[0][0] == 1
+    tables = {
+        name
+        for (name,) in pg_query(
+            "SELECT table_name FROM information_schema.tables"
+            " WHERE table_schema = 'app'"
+        )
+    }
+    assert {"submissions", "request_metadata", "auth_attempts"} <= tables

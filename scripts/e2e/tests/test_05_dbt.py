@@ -12,7 +12,7 @@ from collections import Counter
 
 import pytest
 
-from scripts.e2e.helpers import ch_query, pg_query, run_dbt
+from scripts.e2e.helpers import ENV, ch_query, pg_query, run_dbt
 from scripts.e2e.payloads import EXPECTED_WORD_COUNTS, STOPWORDS_PRESENT
 
 BROWSERS = {"Chrome": "Chrome", "Firefox": "Firefox", "Mobile Safari": "Safari"}
@@ -105,3 +105,12 @@ def test_no_stopwords_and_no_short_tokens(dbt_build: None) -> None:
     assert words
     assert not words & set(STOPWORDS_PRESENT)
     assert all(len(word) >= 3 for word in words)
+
+
+@pytest.mark.parametrize("reader", ["mcp_reader", "charts_reader"])
+def test_readers_select_the_built_marts(dbt_build: None, reader: str) -> None:
+    """Assert 10: readers can SELECT the real marts, not just a probe table."""
+    creds = {"user": reader, "password": ENV[f"CLICKHOUSE_{reader.upper()}_PASSWORD"]}
+    for table in ("fct_submissions", "mart_browser_distribution"):
+        rows = ch_query(f"SELECT count() FROM marts.{table}", **creds)
+        assert rows[0][0] > 0, table

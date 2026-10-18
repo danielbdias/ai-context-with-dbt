@@ -77,6 +77,19 @@ def test_good_submission_adds_one_row_per_table(sample: Sample) -> None:
     assert audit == [(True, "ok")]
 
 
+def test_sample_mix_is_three_chrome_two_firefox_one_safari() -> None:
+    """Assert 2: the fixed-UA fixtures land with the expected families."""
+    rows = pg_query(
+        "SELECT browser_family, os_family, count(*) FROM app.submissions"
+        " GROUP BY 1, 2 ORDER BY 3 DESC"
+    )
+    assert rows == [
+        ("Chrome", "Mac OS X", 3),
+        ("Firefox", "Linux", 2),
+        ("Mobile Safari", "iOS", 1),
+    ]
+
+
 def test_wrong_password_is_401_and_only_audited() -> None:
     before = counts()
     with base_client() as client:

@@ -35,6 +35,7 @@ select = ["E", "F", "W", "I", "UP", "B", "ANN", "D", "S", "C4", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "D"]
+"scripts/e2e/**" = ["S608", "D"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

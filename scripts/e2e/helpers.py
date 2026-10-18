@@ -114,3 +114,59 @@ def container_health() -> dict[str, str]:
 def web_client() -> httpx.Client:
     """HTTP client for the web app (used from the submissions stage on)."""
     return httpx.Client(base_url=f"http://127.0.0.1:{ENV['WEB_PORT']}", timeout=10)
+
+
+def pg_query_as(
+    user: str, password: str, sql: str, db: str = "app"
+) -> list[tuple[Any, ...]]:
+    """Run a query on the e2e Postgres as a given role (to test grants)."""
+    with psycopg.connect(
+        host="127.0.0.1",
+        port=int(ENV["POSTGRES_PORT"]),
+        user=user,
+        password=password,
+        dbname=db,
+        autocommit=True,
+    ) as conn:
+        cur = conn.execute(sql)  # type: ignore[arg-type]
+        return cur.fetchall() if cur.description else []
+
+
+def ch_command(sql: str, user: str = "default", password: str | None = None) -> None:
+    """Run a statement without a result set (DDL, INSERT) on ClickHouse."""
+    if password is None:
+        password = ENV["CLICKHOUSE_DEFAULT_PASSWORD"] if user == "default" else ""
+    client = clickhouse_connect.get_client(
+        host="127.0.0.1",
+        port=int(ENV["CLICKHOUSE_HTTP_PORT"]),
+        username=user,
+        password=password,
+    )
+    try:
+        client.command(sql)
+    finally:
+        client.close()
+
+
+def migrate(revision: str = "head", *, direction: str = "upgrade") -> str:
+    """Run Alembic against the e2e Postgres (same command as `task migrate`)."""
+    env = {k: v for k, v in os.environ.items() if k != "ALEMBIC_DATABASE_URL"}
+    result = subprocess.run(  # noqa: S603
+        [  # noqa: S607
+            "uv",
+            "run",
+            "--package",
+            "web",
+            "alembic",
+            "-c",
+            "apps/web/alembic.ini",
+            direction,
+            revision,
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**env, **ENV, "POSTGRES_HOST": "127.0.0.1"},
+    )
+    return result.stdout + result.stderr

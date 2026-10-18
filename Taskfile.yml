@@ -36,6 +36,15 @@ tasks:
         done < .env.example > .env
       - echo "Created .env"
 
+  migrate:
+    desc: Run Alembic migrations against the dev Postgres (127.0.0.1 port)
+    deps: [env]
+    env:
+      POSTGRES_HOST: 127.0.0.1
+    cmds:
+      # TODO: M4 switches this to the `migrate` compose service.
+      - uv run --package web alembic -c apps/web/alembic.ini upgrade head
+
   lint:
     desc: Ruff check, format check and lockfile check
     cmds:

@@ -19,7 +19,8 @@ project. The suite is marked `e2e` and is excluded from `task test`.
 
 1. Add `scripts/e2e/tests/test_NN_<name>.py` (files run in name order).
 2. Use the helpers in `scripts/e2e/helpers.py`:
-   `pg_query`, `ch_query(sql, user=, password=)` (raises on denied/constraint
+   `pg_query`, `pg_query_as(user, password, sql)`, `migrate(rev, direction=)`,
+   `ch_command` (DDL/INSERT), `ch_query(sql, user=, password=)` (raises on denied/constraint
    errors), `compose_run(service, ..., profiles=[...])` for one-shot services,
    `web_client()` for the web app.
 3. Add the new profile(s) to `E2E_PROFILES` in `Taskfile.yml`, and any new

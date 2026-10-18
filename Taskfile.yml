@@ -5,6 +5,13 @@ dotenv: [".env"]
 vars:
   # Compose profiles started by `up`. Later milestones extend this list.
   PROFILES: core
+  # Compose profiles started by `e2e`. Later milestones extend this list.
+  E2E_PROFILES: core
+  # `env` makes the e2e values win over the dev .env that task loads.
+  E2E_COMPOSE: >-
+    env $(grep -v '^#' scripts/e2e/e2e.env | xargs)
+    docker compose -p aictx-e2e --env-file scripts/e2e/e2e.env
+    -f docker-compose.yml -f scripts/e2e/compose.e2e.yml
 
 tasks:
   setup:
@@ -95,3 +102,18 @@ tasks:
     cmds:
       - docker compose exec -i clickhouse clickhouse-client --password "$CLICKHOUSE_DEFAULT_PASSWORD" {{.CLI_ARGS}}
     interactive: true
+
+  e2e:
+    desc: "Isolated e2e run (project aictx-e2e); E2E_KEEP=1 skips teardown"
+    vars:
+      PROFILE_FLAGS: '{{range splitList "," .E2E_PROFILES}}--profile {{.}} {{end}}'
+    cmds:
+      # Refresh the dir in place: re-creating it can race the bind mount.
+      - mkdir -p scripts/e2e/.work/users.d
+      - find scripts/e2e/.work/users.d -type f -delete
+      - cp -R infra/clickhouse/users.d/. scripts/e2e/.work/users.d/
+      - defer: |
+          if [ -n "$E2E_KEEP" ]; then echo "E2E_KEEP set: aictx-e2e left running"; else {{.E2E_COMPOSE}} --profile '*' down -v --remove-orphans; fi
+      - '{{.E2E_COMPOSE}} --profile "*" down -v --remove-orphans'
+      - '{{.E2E_COMPOSE}} {{.PROFILE_FLAGS}}up -d --wait'
+      - uv run pytest -m e2e scripts/e2e

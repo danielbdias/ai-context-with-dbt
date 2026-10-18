@@ -1,0 +1,5 @@
+<clickhouse>
+    <!-- Default is localhost only, which blocks published ports and other
+         containers. The host side is bound to 127.0.0.1 by compose. -->
+    <listen_host>0.0.0.0</listen_host>
+</clickhouse>

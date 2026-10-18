@@ -19,7 +19,9 @@ transform = { workspace = true }
 [dependency-groups]
 dev = [
     "anyio>=4.15.1",
+    "clickhouse-connect>=1.11.0",
     "httpx>=0.28.1",
+    "psycopg[binary]>=3.3.6",
     "pytest>=9.1.1",
     "ruff>=0.17.1",
 ]
@@ -39,5 +41,9 @@ convention = "google"
 
 [tool.pytest.ini_options]
 testpaths = ["apps/web/tests", "apps/el/tests", "transform/tests"]
-addopts = "-ra -m 'not integration'"
-markers = ["integration: needs real containers (deselected by default)"]
+addopts = "-ra -m 'not integration and not e2e'"
+pythonpath = ["."]
+markers = [
+    "integration: needs real containers (deselected by default)",
+    "e2e: runs against the isolated aictx-e2e compose project (task e2e)",
+]

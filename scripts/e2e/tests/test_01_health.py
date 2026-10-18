@@ -7,6 +7,7 @@ def test_containers_healthy() -> None:
     health = container_health()
     assert health["postgres"] == "healthy"
     assert health["clickhouse"] == "healthy"
+    assert health["web"] == "healthy"
 
 
 def test_postgres_databases() -> None:

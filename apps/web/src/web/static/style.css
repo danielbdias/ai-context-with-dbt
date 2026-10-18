@@ -1,0 +1,9 @@
+body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; }
+.banner { background: #b00020; color: #fff; text-align: center; padding: 0.75rem; font-weight: 700; }
+main { max-width: 32rem; margin: 2rem auto; padding: 0 1rem; }
+form { display: flex; flex-direction: column; gap: 0.5rem; }
+input, textarea, button { font: inherit; padding: 0.5rem; }
+button { cursor: pointer; }
+.flash { padding: 0.75rem; border-radius: 4px; }
+.flash.ok { background: #d9f2e1; }
+.flash.error { background: #fbdada; }

@@ -9,7 +9,7 @@ next to the dev stack.
 ```bash
 task e2e                              # up, wait healthy, pytest, always down -v
 E2E_KEEP=1 task e2e                   # leave the stack up to debug
-task e2e E2E_PROFILES=core,app        # extra compose profiles
+task e2e E2E_PROFILES=core,app,el    # extra compose profiles (default core,app)
 ```
 
 `e2e.env` holds test-only credentials and ports. It replaces `.env` for this

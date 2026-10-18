@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -111,9 +111,11 @@ def container_health() -> dict[str, str]:
     return dict(line.split(" ", 1) for line in out.splitlines() if " " in line)
 
 
-def web_client() -> httpx.Client:
-    """HTTP client for the web app (used from the submissions stage on)."""
-    return httpx.Client(base_url=f"http://127.0.0.1:{ENV['WEB_PORT']}", timeout=10)
+def web_client(headers: Mapping[str, str] | None = None) -> httpx.Client:
+    """HTTP client for the web app, optionally with fixed request headers."""
+    return httpx.Client(
+        base_url=f"http://127.0.0.1:{ENV['WEB_PORT']}", headers=headers, timeout=10
+    )
 
 
 def pg_query_as(

@@ -1,5 +1,12 @@
 name: aictx
 
+# Shared by `migrate` and `web`: one image, built from the repo root.
+x-web-image: &web-image
+  image: aictx-web:local
+  build:
+    context: .
+    dockerfile: apps/web/Dockerfile
+
 services:
   postgres:
     image: postgres:18.6
@@ -56,6 +63,50 @@ services:
       timeout: 3s
       retries: 20
     mem_limit: 2g
+    networks: [backend]
+
+  migrate:
+    <<: *web-image
+    profiles: [app]
+    command: ["alembic", "-c", "apps/web/alembic.ini", "upgrade", "head"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_APP_OWNER_PASSWORD: ${POSTGRES_APP_OWNER_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 256m
+    networks: [backend]
+
+  web:
+    <<: *web-image
+    profiles: [app]
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD}
+      CSRF_SECRET: ${CSRF_SECRET}
+      IP_SALT: ${IP_SALT}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_WEB_WRITER_PASSWORD: ${POSTGRES_WEB_WRITER_PASSWORD}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-5}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-900}
+    ports:
+      - "127.0.0.1:${WEB_PORT}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    mem_limit: 256m
     networks: [backend]
 
 networks:

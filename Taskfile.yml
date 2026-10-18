@@ -4,9 +4,9 @@ dotenv: [".env"]
 
 vars:
   # Compose profiles started by `up`. Later milestones extend this list.
-  PROFILES: core
+  PROFILES: core,app
   # Compose profiles started by `e2e`. Later milestones extend this list.
-  E2E_PROFILES: core
+  E2E_PROFILES: core,app
   # `env` makes the e2e values win over the dev .env that task loads.
   E2E_COMPOSE: >-
     env $(grep -v '^#' scripts/e2e/e2e.env | xargs)
@@ -37,13 +37,27 @@ tasks:
       - echo "Created .env"
 
   migrate:
-    desc: Run Alembic migrations against the dev Postgres (127.0.0.1 port)
+    desc: Run Alembic migrations through the `migrate` compose service
     deps: [env]
-    env:
-      POSTGRES_HOST: 127.0.0.1
     cmds:
-      # TODO: M4 switches this to the `migrate` compose service.
-      - uv run --package web alembic -c apps/web/alembic.ini upgrade head
+      - docker compose --profile core --profile app run --rm --build migrate
+
+  run-app:
+    desc: Build and start the web app (and what it needs) and wait for health
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile app up -d --build --wait web
+
+  app:open:
+    desc: Open the web app in the browser
+    cmds:
+      - open "http://127.0.0.1:${WEB_PORT:-8000}"
+
+  seed:
+    desc: POST sample good and bad submissions to the running web app
+    deps: [env]
+    cmds:
+      - uv run python -m scripts.seed
 
   lint:
     desc: Ruff check, format check and lockfile check
@@ -63,11 +77,17 @@ tasks:
     cmds:
       - uv run pytest
 
+  test:integration:
+    desc: Run integration tests against the dev stack (task up first)
+    deps: [env]
+    cmds:
+      - uv run pytest -m integration
+
   up:
     desc: Start the stack for PROFILES (default core) and wait for health
     deps: [env]
     cmds:
-      - docker compose {{range splitList "," .PROFILES}}--profile {{.}} {{end}}up -d --wait
+      - docker compose {{range splitList "," .PROFILES}}--profile {{.}} {{end}}up -d --build --wait
 
   down:
     desc: Stop every profile (volumes are kept)
@@ -124,5 +144,5 @@ tasks:
       - defer: |
           if [ -n "$E2E_KEEP" ]; then echo "E2E_KEEP set: aictx-e2e left running"; else {{.E2E_COMPOSE}} --profile '*' down -v --remove-orphans; fi
       - '{{.E2E_COMPOSE}} --profile "*" down -v --remove-orphans'
-      - '{{.E2E_COMPOSE}} {{.PROFILE_FLAGS}}up -d --wait'
+      - '{{.E2E_COMPOSE}} {{.PROFILE_FLAGS}}up -d --build --wait'
       - uv run pytest -m e2e scripts/e2e

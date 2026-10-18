@@ -1,5 +1,11 @@
 version: "3"
 
+dotenv: [".env"]
+
+vars:
+  # Compose profiles started by `up`. Later milestones extend this list.
+  PROFILES: core
+
 tasks:
   setup:
     desc: Check toolchain, sync the uv workspace and create .env
@@ -40,3 +46,52 @@ tasks:
     desc: Run unit tests (integration tests are deselected)
     cmds:
       - uv run pytest
+
+  up:
+    desc: Start the stack for PROFILES (default core) and wait for health
+    deps: [env]
+    cmds:
+      - docker compose {{range splitList "," .PROFILES}}--profile {{.}} {{end}}up -d --wait
+
+  down:
+    desc: Stop every profile (volumes are kept)
+    cmds:
+      - docker compose --profile '*' down
+
+  reset:
+    desc: Stop every profile and delete volumes
+    cmds:
+      - docker compose --profile '*' down -v
+
+  ps:
+    desc: List containers
+    cmds:
+      - docker compose --profile '*' ps
+
+  logs:
+    desc: "Follow logs, e.g. task logs SVC=clickhouse"
+    cmds:
+      - docker compose --profile '*' logs -f {{.SVC}}
+
+  sh:
+    desc: "Open a shell in a container, e.g. task sh SVC=postgres"
+    requires:
+      vars: [SVC]
+    cmds:
+      - docker compose --profile '*' exec {{.SVC}} sh
+
+  psql:
+    desc: "psql as admin, e.g. task psql DB=app -- -c 'select 1'"
+    deps: [env]
+    vars:
+      DB: '{{.DB | default "app"}}'
+    cmds:
+      - docker compose exec -T -e PGPASSWORD="$POSTGRES_ADMIN_PASSWORD" postgres psql -U postgres -d {{.DB}} {{.CLI_ARGS}}
+    interactive: true
+
+  ch:
+    desc: "clickhouse-client as default user, e.g. task ch -- -q 'select 1'"
+    deps: [env]
+    cmds:
+      - docker compose exec -i clickhouse clickhouse-client --password "$CLICKHOUSE_DEFAULT_PASSWORD" {{.CLI_ARGS}}
+    interactive: true

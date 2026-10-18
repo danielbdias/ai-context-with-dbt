@@ -26,3 +26,6 @@ transform/dbt/.user.yml
 .DS_Store
 .idea/
 .vscode/
+
+# ClickHouse entrypoint-generated (contains the default password)
+infra/clickhouse/users.d/default-user.xml

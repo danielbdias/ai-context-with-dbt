@@ -37,7 +37,8 @@ approve the `dbt` server and ask "what are the top browsers?". `task mcp:smoke`
 does the same without a GUI.
 
 `task --list` shows everything else. `task down` stops the stack and keeps
-data. `task reset` also deletes the volumes.
+data. `task reset` also deletes the volumes and the dbt artifacts in
+`transform/dbt/target`.
 
 ## Ports (127.0.0.1 only)
 

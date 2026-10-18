@@ -3,7 +3,7 @@ version: "3"
 dotenv: [".env"]
 
 vars:
-  # Compose profiles started by `up`. Later milestones extend this list.
+  # Compose profiles started by `up` (override: task up PROFILES=core).
   PROFILES: core,app
   # One-shot dbt container. `--build` is a cheap cache hit when nothing changed.
   DBT: docker compose --profile core --profile dbt run --rm --build dbt
@@ -12,7 +12,7 @@ vars:
   TARGET_PATH: '{{.TARGET_PATH | default ""}}'
   TARGET_FLAGS: >-
     --target {{.TARGET}}{{if .TARGET_PATH}} --target-path {{.TARGET_PATH}}{{end}}
-  # Compose profiles started by `e2e`. Later milestones extend this list.
+  # Compose profiles started by `e2e`. One-shots (el, dbt, mcp) run per test.
   E2E_PROFILES: core,app
   # `env` makes the e2e values win over the dev .env that task loads.
   E2E_COMPOSE: >-
@@ -238,7 +238,7 @@ tasks:
       - uv run pytest -m integration
 
   up:
-    desc: Start the stack for PROFILES (default core) and wait for health
+    desc: Start the stack for PROFILES (default core,app) and wait for health
     deps: [env]
     cmds:
       - docker compose {{range splitList "," .PROFILES}}--profile {{.}} {{end}}up -d --build --wait
@@ -249,9 +249,12 @@ tasks:
       - docker compose --profile '*' down
 
   reset:
-    desc: Stop every profile and delete volumes
+    desc: Stop every profile, delete volumes and clear dbt artifacts
     cmds:
       - docker compose --profile '*' down -v
+      # Keep target/ and target_mcp/ themselves: dbt-mcp needs them as mountpoints.
+      - find transform/dbt/target transform/dbt/target_mcp -mindepth 1 -delete 2>/dev/null || true
+      - rm -rf transform/dbt/logs
 
   ps:
     desc: List containers

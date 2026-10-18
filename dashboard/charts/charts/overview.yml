@@ -1,0 +1,65 @@
+title: "Submissions overview"
+source: warehouse
+
+queries:
+  total_submissions:
+    sql: |
+      SELECT sum(submissions_count) AS total_submissions
+      FROM {{ ref('mart_submissions_daily') }}
+  browsers:
+    sql: |
+      SELECT browser, submissions_count
+      FROM {{ ref('mart_browser_distribution') }}
+      ORDER BY submissions_count DESC
+  operating_systems:
+    sql: |
+      SELECT os, submissions_count
+      FROM {{ ref('mart_os_distribution') }}
+      ORDER BY submissions_count DESC
+  daily:
+    sql: |
+      SELECT day, submissions_count
+      FROM {{ ref('mart_submissions_daily') }}
+      ORDER BY day
+  top_combinations:
+    sql: |
+      SELECT popularity_rank, browser, os, submissions_count
+      FROM {{ ref('mart_browser_os_combinations') }}
+      ORDER BY popularity_rank
+      LIMIT 10
+
+charts:
+  total_submissions:
+    query: total_submissions
+    type: kpi
+    label: Total submissions
+    value: total_submissions
+  browser_share:
+    query: browsers
+    type: donut
+    title: Browsers
+    theta: submissions_count
+    color: browser
+  os_share:
+    query: operating_systems
+    type: donut
+    title: Operating systems
+    theta: submissions_count
+    color: os
+  daily_submissions:
+    query: daily
+    type: line
+    title: Submissions per day
+    x: day
+    y: submissions_count
+  top_combinations:
+    query: top_combinations
+    type: table
+    title: Top browser and OS combinations
+
+rows:
+  - cols: [total_submissions, browser_share, os_share]
+  - daily_submissions
+  - top_combinations
+  - text: |
+      Top words and the word cloud are on the [words board](/words/).

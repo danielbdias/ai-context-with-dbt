@@ -25,6 +25,7 @@ project. The suite is marked `e2e` and is excluded from `task test`.
 | `test_04_el.py` | dlt: idempotent reruns, soft delete, no aux tables, fails when ClickHouse is down |
 | `test_05_dbt.py` | dbt v2 build and docs generate, mart counts and word frequencies vs Postgres |
 | `test_06_mcp.py` | dbt-mcp over stdio: exactly 6 tools, `show` answers top browsers, `query_log` shows only `mcp_reader` reads; `dbt show --inline --target mcp` returns rows, `show --select` on staging is denied |
+| `test_07_dashboards.py` | dbt Charts renders both boards (HTML has the expected numbers and labels), `/` `/overview/` `/words/` 200, Superset `/health` 200, the imported dashboard and chart exist, the chart data API returns the word rows, readers are limited to their marts, the bundle holds no secrets |
 
 `run_dbt(*args)` does the same for the dbt one-shot (profile `dbt`, artifacts in
 `target/e2e`). `run_el(env=None)` builds and runs the EL one-shot (profile `el` is not in

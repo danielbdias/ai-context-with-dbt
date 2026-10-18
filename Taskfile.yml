@@ -22,10 +22,11 @@ vars:
 
 tasks:
   setup:
-    desc: Check toolchain, sync the uv workspace and create .env
+    desc: Check toolchain, sync the uv workspace and the dbt Charts project, create .env
     cmds:
       - asdf current python uv task
       - uv sync --all-packages
+      - uv sync --frozen --directory dashboard/charts
       - task: env
       # The ClickHouse ADBC driver is baked into the image at build time, so
       # there is nothing to download on first use.
@@ -124,6 +125,30 @@ tasks:
       - task: dbt:parse
       - uv run python -m scripts.check_dbt_descriptions
 
+  dashboard:
+    desc: Parse the charts manifest, start dbt Charts and Superset, open the overview board
+    deps: [env]
+    cmds:
+      - task: dbt:parse
+        vars: {TARGET: charts, TARGET_PATH: target/charts}
+      - docker compose --profile core --profile dashboard up -d --build --wait charts superset
+      - open "http://127.0.0.1:${CHARTS_PORT:-8090}/overview/"
+
+  charts:validate:
+    desc: dct validate --warehouse on every board, inside the running charts container
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile dashboard up -d --build --wait charts
+      - docker compose --profile core --profile dashboard exec -T -w /work/project charts dct validate --warehouse
+
+  charts:render:
+    desc: Render both boards to HTML under dashboard/charts/renders (gitignored)
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile dashboard up -d --build --wait charts
+      - mkdir -p dashboard/charts/renders
+      - for board in overview words; do docker compose --profile core --profile dashboard exec -T -w /work/project charts dct render charts/$board.yml --format html -o - > dashboard/charts/renders/$board.html; done
+
   mcp:build:
     desc: Build the dbt-mcp image (Claude starts it over stdio, so build first)
     deps: [env]
@@ -174,12 +199,26 @@ tasks:
         EOF
 
   lint:
-    desc: Ruff check, format check, lockfile check and dbt description coverage
+    desc: Ruff check, format check, lockfile checks (all three projects), dbt description coverage and a static board check
     cmds:
       - task: dbt:coverage
       - uv run ruff check .
       - uv run ruff format --check .
       - uv lock --check
+      - task: charts:lint
+      - task: superset:lock
+
+  charts:lint:
+    desc: Lock check and static board validation (no warehouse; uses the dev manifest from dbt:coverage)
+    dir: dashboard/charts
+    cmds:
+      - uv lock --check
+      - uv run dct validate --dbt-project-dir ../../transform/dbt
+
+  superset:lock:
+    desc: Check the Superset driver lock inside the image (same uv and Python 3.10 as the build)
+    cmds:
+      - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uvcache -v "{{.ROOT_DIR}}/dashboard/superset:/work" -w /work --entrypoint uv apache/superset:6.1.0 lock --check
 
   fmt:
     desc: Auto-fix and format with ruff

@@ -83,9 +83,17 @@ Notes:
   itself, so readers get no system-table grants. The v1 profile key
   `check_exchange: false` is accepted and parsed by v2 (`dbt debug` lists it).
   It only matters when materializing tables, which readers never do.
-- Not granted yet, to be proven by a spike: `system.tables`/`system.columns`
-  for `charts_reader` (M8). Add them to `01-access.sh` only when a spike shows
-  they are needed.
+- Proven in M8: dbt Charts (`dct`) with `charts_reader` and Superset with
+  `superset_reader` need no system-table grants. `dct validate --warehouse`,
+  `dct render` (all boards) and the Superset chart data API run on `SELECT`
+  over `marts` alone, so `01-access.sh` is unchanged. `dct` reads its
+  `ref()` relations from the manifest file and never introspects the
+  warehouse. Superset reads only `marts.mart_word_frequencies`. The
+  Superset metadata DB lives in Postgres (`superset_meta`), not ClickHouse.
+- `charts_reader` runs `dct` with a 30 s statement cap. The `charts` target in
+  `transform/dbt/profiles.yml` sets `custom_settings.max_execution_time: 30`.
+  Without it `dct` sends its 120 s default, which the reader profile rejects
+  (`SETTING_CONSTRAINT_VIOLATION`).
 
 ### Settings profile `reader` (`mcp_reader`, `charts_reader`, `superset_reader`)
 

@@ -209,3 +209,25 @@ def migrate(revision: str = "head", *, direction: str = "upgrade") -> str:
         env={**env, **ENV, "POSTGRES_HOST": "127.0.0.1"},
     )
     return result.stdout + result.stderr
+
+
+def superset_client() -> httpx.Client:
+    """Superset API client logged in as admin (JWT bearer plus CSRF for writes)."""
+    client = httpx.Client(
+        base_url=f"http://127.0.0.1:{ENV['SUPERSET_PORT']}", timeout=60
+    )
+    login = client.post(
+        "/api/v1/security/login",
+        json={
+            "username": "admin",
+            "password": ENV["SUPERSET_ADMIN_PASSWORD"],
+            "provider": "db",
+            "refresh": True,
+        },
+    )
+    login.raise_for_status()
+    client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
+    csrf = client.get("/api/v1/security/csrf_token/")
+    csrf.raise_for_status()
+    client.headers["X-CSRFToken"] = csrf.json()["result"]
+    return client

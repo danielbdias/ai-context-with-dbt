@@ -1,0 +1,27 @@
+title: "Words"
+source: warehouse
+
+queries:
+  top_words:
+    sql: |
+      SELECT display_word, frequency
+      FROM {{ ref('mart_word_frequencies') }}
+      ORDER BY frequency DESC, display_word
+      LIMIT 30
+
+charts:
+  top_words:
+    query: top_words
+    type: bar
+    title: Top 30 words
+    x: display_word
+    y: frequency
+    style:
+      orientation: horizontal
+
+rows:
+  - text: |
+      The word cloud is a native Superset chart:
+      [open the word cloud](http://127.0.0.1:__SUPERSET_PORT__/login/?next=http://127.0.0.1:__SUPERSET_PORT__/superset/dashboard/word-cloud/)
+      (Superset asks for the admin login from `.env` first).
+  - top_words

@@ -1,0 +1,31 @@
+slice_name: Word cloud
+description: null
+certified_by: null
+certification_details: null
+viz_type: word_cloud
+params:
+  viz_type: word_cloud
+  datasource: 1__table
+  series: display_word
+  metric:
+    expressionType: SIMPLE
+    column:
+      column_name: frequency
+      type: UInt64
+    aggregate: SUM
+    label: SUM(frequency)
+    hasCustomLabel: false
+    optionName: metric_word_frequency
+  adhoc_filters: []
+  row_limit: 100
+  size_from: 10
+  size_to: 70
+  rotation: square
+  color_scheme: supersetColors
+  extra_form_data: {}
+  annotation_layers: []
+query_context: null
+cache_timeout: null
+uuid: b0cb7af6-e374-462c-850f-782520e62384
+version: 1.0.0
+dataset_uuid: 8f8855c3-4fbd-4bec-9951-13b317a857d0

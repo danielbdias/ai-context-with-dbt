@@ -33,3 +33,7 @@ aictx:
       schema: marts
       check_exchange: false
       threads: 2
+      # dbt Charts caps each query at 120 s unless the profile caps it lower,
+      # and the reader profile allows at most 30 s (infra/clickhouse).
+      custom_settings:
+        max_execution_time: 30

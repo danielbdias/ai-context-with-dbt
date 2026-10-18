@@ -7,6 +7,12 @@ x-web-image: &web-image
     context: .
     dockerfile: apps/web/Dockerfile
 
+# Shared by `superset-init` and `superset`: the Superset image plus the driver.
+x-superset-image: &superset-image
+  image: aictx-superset:local
+  build:
+    context: dashboard/superset
+
 services:
   postgres:
     image: postgres:18.6
@@ -199,12 +205,108 @@ services:
     mem_limit: 512m
     networks: [backend]
 
+  # dbt Charts (`dct serve`). Boards and the dbt project files are read-only
+  # mounts. The charts manifest comes from `task dbt:parse TARGET=charts
+  # TARGET_PATH=target/charts`. e2e points CHARTS_MANIFEST_DIR at its own copy.
+  charts:
+    image: aictx-charts:local
+    build:
+      context: dashboard/charts
+    profiles: [dashboard]
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: "8123"
+      CLICKHOUSE_CHARTS_READER_PASSWORD: ${CLICKHOUSE_CHARTS_READER_PASSWORD}
+      # Only used to build the word-cloud link in the words board.
+      SUPERSET_PORT: ${SUPERSET_PORT:-8088}
+    ports:
+      - "127.0.0.1:${CHARTS_PORT:-8090}:8090"
+    volumes:
+      - ./dashboard/charts/dbt_charts.yml:/app/src/dbt_charts.yml:ro
+      - ./dashboard/charts/charts:/app/src/charts:ro
+      - ./transform/dbt/dbt_project.yml:/app/dbt/dbt_project.yml:ro
+      - ./transform/dbt/profiles.yml:/app/dbt/profiles.yml:ro
+      - ${CHARTS_MANIFEST_DIR:-./transform/dbt/target/charts}:/app/dbt/target:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request as u; u.urlopen('http://127.0.0.1:8090/', timeout=3)"
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    mem_limit: 512m
+    networks: [backend]
+
+  # Superset, used for the word cloud only. The driver goes in at build time
+  # from dashboard/superset/uv.lock (the image has no ClickHouse or Postgres
+  # driver). See dashboard/superset/README.md.
+  superset-init:
+    <<: *superset-image
+    profiles: [dashboard]
+    command: ["/app/aictx/init.sh"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_SUPERSET_META_PASSWORD: ${POSTGRES_SUPERSET_META_PASSWORD}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: "8123"
+      CLICKHOUSE_SUPERSET_READER_PASSWORD: ${CLICKHOUSE_SUPERSET_READER_PASSWORD}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+    volumes:
+      - superset_home:/app/superset_home
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 1g
+    networks: [backend]
+
+  superset:
+    <<: *superset-image
+    profiles: [dashboard]
+    # No ClickHouse credentials here: the reader connection is stored in the
+    # Superset metadata DB by superset-init, and only the server reads it back.
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_SUPERSET_META_PASSWORD: ${POSTGRES_SUPERSET_META_PASSWORD}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+    ports:
+      - "127.0.0.1:${SUPERSET_PORT:-8088}:8088"
+    volumes:
+      - superset_home:/app/superset_home
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request as u; u.urlopen('http://127.0.0.1:8088/health', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    mem_limit: 1.5g
+    networks: [backend]
+
 networks:
   backend:
 
 volumes:
   pg_data:
   ch_data:
+  # Superset's local home (caches, generated files). Its metadata lives in Postgres.
+  superset_home:
   # In-memory and owned by the image's `app` user. Emptied when no dbt-mcp
   # container uses it.
   dbt_mcp_target:

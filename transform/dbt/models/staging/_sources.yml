@@ -1,0 +1,37 @@
+version: 2
+
+sources:
+  - name: app
+    description: >
+      Tables that the dlt EL job copies as-is from the Postgres app database
+      into the ClickHouse raw database. Nothing here is cleaned.
+    schema: raw
+    config:
+      loaded_at_field: updated_at
+      freshness:
+        warn_after: {count: 24, period: hour}
+    tables:
+      - name: submissions
+        description: >
+          Raw copy of app.submissions. One row per submission id after the dlt
+          merge, soft-deleted rows included. Use stg_app__submissions instead.
+        columns:
+          - name: id
+            description: Submission id from Postgres (primary key and merge key).
+            data_tests: [not_null]
+          - name: message
+            description: Free text typed by the visitor, at most 280 characters.
+          - name: browser_family
+            description: Browser family exactly as ua-parser reports it, for example Mobile Safari.
+          - name: os_family
+            description: OS family exactly as ua-parser reports it, for example Mac OS X.
+          - name: created_at
+            description: When the submission was created (UTC).
+          - name: updated_at
+            description: Last change in Postgres (UTC). It is the dlt incremental cursor.
+          - name: deleted_at
+            description: When the submission was soft-deleted (UTC), or NULL if it is live.
+          - name: _dlt_load_id
+            description: dlt load package that wrote this row.
+          - name: _dlt_id
+            description: dlt row id.

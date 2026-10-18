@@ -1,0 +1,173 @@
+version: 2
+
+models:
+  - name: fct_submissions
+    semantic_model:
+      enabled: true
+      name: submissions
+    agg_time_dimension: created_date
+    description: >
+      Fact table. Grain is one row per live (not soft-deleted) submission.
+      Answers "how many submissions are there", "what did people write" and
+      "which browser and OS did they use". Contains the free-text message, which
+      is the only personal-data-adjacent field and carries a no-personal-data
+      notice on the form. Example:
+      {% raw %}dbt show --inline "select browser, os, count() as n from {{ ref('fct_submissions') }} group by browser, os order by n desc"{% endraw %}
+    columns:
+      - name: submission_id
+        entity:
+          name: submission
+          type: primary
+        description: Submission id from Postgres. One row per id.
+        data_tests: [unique, not_null]
+      - name: message
+        description: Free text typed by the visitor, up to 280 characters.
+      - name: browser
+        description: Normalized browser. One of Chrome, Firefox, Safari, Edge, Opera or Other.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('mart_browser_distribution')
+                field: browser
+      - name: os
+        description: Normalized operating system. One of Windows, macOS, Linux, iOS, Android or Other.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('mart_os_distribution')
+                field: os
+      - name: created_at
+        description: When the submission was created (UTC, microsecond precision).
+      - name: created_date
+        granularity: day
+        dimension:
+          type: time
+        description: Calendar day of created_at in UTC. Use it for per-day questions.
+      - name: updated_at
+        description: Last change of the submission in Postgres (UTC).
+
+  - name: mart_browser_distribution
+    description: >
+      Grain is one row per browser that has at least one live submission.
+      Answers "what are the top browsers" and "what share uses Chrome".
+      Counts add up to the row count of fct_submissions. Example:
+      {% raw %}dbt show --inline "select browser, submissions_count, pct from {{ ref('mart_browser_distribution') }} order by submissions_count desc"{% endraw %}
+    columns:
+      - name: browser
+        description: Normalized browser. One of Chrome, Firefox, Safari, Edge, Opera or Other.
+        data_tests:
+          - unique
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Chrome, Firefox, Safari, Edge, Opera, Other]
+      - name: submissions_count
+        description: Number of live submissions made with this browser.
+        data_tests: [not_null]
+      - name: pct
+        description: Share of all live submissions as a percentage between 0 and 100, rounded to 2 decimals.
+
+  - name: mart_os_distribution
+    description: >
+      Grain is one row per operating system that has at least one live
+      submission. Answers "what are the top operating systems" and "how much
+      traffic is mobile (iOS and Android)". Counts add up to the row count of
+      fct_submissions. Example:
+      {% raw %}dbt show --inline "select os, submissions_count, pct from {{ ref('mart_os_distribution') }} order by submissions_count desc"{% endraw %}
+    columns:
+      - name: os
+        description: Normalized operating system. One of Windows, macOS, Linux, iOS, Android or Other.
+        data_tests:
+          - unique
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Windows, macOS, Linux, iOS, Android, Other]
+      - name: submissions_count
+        description: Number of live submissions made from this operating system.
+        data_tests: [not_null]
+      - name: pct
+        description: Share of all live submissions as a percentage between 0 and 100, rounded to 2 decimals.
+
+  - name: mart_browser_os_combinations
+    description: >
+      Grain is one row per browser and OS pair seen in live submissions, ranked
+      by popularity. Answers "which browser on which OS is most common" and "do
+      Safari users only come from Apple systems". Example:
+      {% raw %}dbt show --inline "select browser, os, submissions_count from {{ ref('mart_browser_os_combinations') }} order by popularity_rank" --limit 5{% endraw %}
+    data_tests:
+      - unique_combination:
+          arguments:
+            combination_columns: [browser, os]
+    columns:
+      - name: browser
+        description: Normalized browser. One of Chrome, Firefox, Safari, Edge, Opera or Other.
+        data_tests: [not_null]
+      - name: os
+        description: Normalized operating system. One of Windows, macOS, Linux, iOS, Android or Other.
+        data_tests: [not_null]
+      - name: submissions_count
+        description: Number of live submissions for this browser and OS pair.
+      - name: popularity_rank
+        description: Rank of the pair by submissions_count, 1 is the most common. Ties are broken by browser then OS name.
+        data_tests: [unique]
+
+  - name: mart_submissions_daily
+    description: >
+      Grain is one row per UTC calendar day with at least one live submission.
+      Days without submissions are absent. Answers "how many submissions per
+      day" and "how many in total so far". Example:
+      {% raw %}dbt show --inline "select day, submissions_count, cumulative_submissions from {{ ref('mart_submissions_daily') }} order by day"{% endraw %}
+    columns:
+      - name: day
+        description: UTC calendar day of the submission.
+        data_tests: [unique, not_null]
+      - name: submissions_count
+        description: Number of live submissions created on this day.
+      - name: cumulative_submissions
+        description: Running total of submissions_count up to and including this day.
+
+  - name: mart_word_frequencies
+    description: >
+      Grain is one row per distinct word in live messages. Words are lowercased
+      and accent-folded (café and cafe count together), exclude Portuguese and
+      English stopwords and have at least 3 letters. Answers "which words do
+      people use most" and feeds the word cloud. Example:
+      {% raw %}dbt show --inline "select display_word, frequency from {{ ref('mart_word_frequencies') }} order by frequency desc" --limit 20{% endraw %}
+    columns:
+      - name: word
+        description: Folded word (lowercase, no accents). Unique per row.
+        data_tests:
+          - unique
+          - not_null
+          - no_stopwords
+          - min_length:
+              arguments:
+                min_length: 3
+      - name: display_word
+        description: Most common original spelling of the word, with accents. Show this to people.
+        data_tests: [not_null]
+      - name: frequency
+        description: Number of times the word occurs across all live messages.
+        data_tests: [not_null]
+
+  - name: metricflow_time_spine
+    description: >
+      Calendar spine. Grain is one row per day from 2024-01-01 for 3650 days.
+      Required by MetricFlow for the submissions_count metric. Not meant for
+      direct analysis.
+    columns:
+      - name: date_day
+        description: Calendar day. Unique.
+        data_tests: [unique, not_null]
+
+metrics:
+  - name: submissions_count
+    label: Submissions
+    description: Total number of live submissions.
+    type: simple
+    agg: count
+    expr: submission_id
+    model: ref('fct_submissions')

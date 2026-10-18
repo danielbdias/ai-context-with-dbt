@@ -1,0 +1,305 @@
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  # Compose profiles started by `up` (override: task up PROFILES=core).
+  PROFILES: core,app
+  # One-shot dbt container. `--build` is a cheap cache hit when nothing changed.
+  DBT: docker compose --profile core --profile dbt run --rm --build dbt
+  # Build/parse target (dev, ci, mcp, charts) and an optional artifacts dir.
+  TARGET: '{{.TARGET | default "dev"}}'
+  TARGET_PATH: '{{.TARGET_PATH | default ""}}'
+  TARGET_FLAGS: >-
+    --target {{.TARGET}}{{if .TARGET_PATH}} --target-path {{.TARGET_PATH}}{{end}}
+  # Compose profiles started by `e2e`. One-shots (el, dbt, mcp) run per test.
+  E2E_PROFILES: core,app
+  # `env` makes the e2e values win over the dev .env that task loads.
+  E2E_COMPOSE: >-
+    env $(grep -v '^#' scripts/e2e/e2e.env | xargs)
+    docker compose -p aictx-e2e --env-file scripts/e2e/e2e.env
+    -f docker-compose.yml -f scripts/e2e/compose.e2e.yml
+
+tasks:
+  setup:
+    desc: Check toolchain, sync the uv workspace and the dbt Charts project, create .env
+    cmds:
+      - asdf current python uv task
+      - uv sync --all-packages
+      - uv sync --frozen --directory dashboard/charts
+      - task: env
+      # The ClickHouse ADBC driver is baked into the image at build time, so
+      # there is nothing to download on first use.
+      - docker compose --profile core --profile dbt build dbt
+
+  env:
+    desc: Create .env from .env.example with random secrets if missing
+    status:
+      - test -f .env
+    cmds:
+      - |
+        while IFS= read -r line; do
+          while [[ "$line" == *change-me* ]]; do
+            line="${line/change-me/$(openssl rand -hex 16)}"
+          done
+          printf '%s\n' "$line"
+        done < .env.example > .env
+      - echo "Created .env"
+
+  migrate:
+    desc: Run Alembic migrations through the `migrate` compose service
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile app run --rm --build migrate
+
+  run-app:
+    desc: Build and start the web app (and what it needs) and wait for health
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile app up -d --build --wait web
+
+  app:open:
+    desc: Open the web app in the browser
+    cmds:
+      - open "http://127.0.0.1:${WEB_PORT:-8000}"
+
+  seed:
+    desc: POST sample good and bad submissions to the running web app
+    deps: [env]
+    cmds:
+      - uv run python -m scripts.seed
+
+  el:
+    desc: Run the dlt EL one-shot (Postgres submissions -> ClickHouse raw)
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile el run --rm --build el
+
+  dbt:build:
+    desc: "dbt build (seeds, models, tests), e.g. task dbt:build -- --select mart_word_frequencies+"
+    deps: [env]
+    cmds:
+      - '{{.DBT}} build {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
+
+  dbt:run:
+    desc: dbt run (models only)
+    deps: [env]
+    cmds:
+      - '{{.DBT}} run {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
+
+  dbt:test:
+    desc: dbt test (data and unit tests)
+    deps: [env]
+    cmds:
+      - '{{.DBT}} test {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
+
+  dbt:freshness:
+    desc: Source freshness (warn only)
+    deps: [env]
+    cmds:
+      - '{{.DBT}} source freshness {{.TARGET_FLAGS}}'
+
+  dbt:parse:
+    desc: "dbt parse, e.g. task dbt:parse TARGET=charts TARGET_PATH=target/charts"
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile dbt run --rm --no-deps --build dbt parse {{.TARGET_FLAGS}}
+
+  dbt:debug:
+    desc: Check the profile and the ClickHouse connection
+    deps: [env]
+    cmds:
+      - '{{.DBT}} debug {{.TARGET_FLAGS}}'
+
+  dbt:docs:
+    desc: Generate the docs site and serve it on http://127.0.0.1:${DBT_DOCS_PORT:-8081}
+    deps: [env]
+    cmds:
+      - '{{.DBT}} docs generate {{.TARGET_FLAGS}}'
+      - docker compose --profile core --profile dbt run --rm --service-ports dbt docs serve --no-open
+
+  dbt:coverage:
+    desc: Fail when a dbt model, seed, source or column has no description
+    deps: [env]
+    cmds:
+      - task: dbt:parse
+      - uv run python -m scripts.check_dbt_descriptions
+
+  dashboard:
+    desc: Parse the charts manifest, start dbt Charts and Superset, open the overview board
+    deps: [env]
+    cmds:
+      - task: dbt:parse
+        vars: {TARGET: charts, TARGET_PATH: target/charts}
+      - docker compose --profile core --profile dashboard up -d --build --wait charts superset
+      - open "http://127.0.0.1:${CHARTS_PORT:-8090}/overview/"
+
+  charts:validate:
+    desc: dct validate --warehouse on every board, inside the running charts container
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile dashboard up -d --build --wait charts
+      - docker compose --profile core --profile dashboard exec -T -w /work/project charts dct validate --warehouse
+
+  charts:render:
+    desc: Render both boards to HTML under dashboard/charts/renders (gitignored)
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile dashboard up -d --build --wait charts
+      - mkdir -p dashboard/charts/renders
+      - for board in overview words; do docker compose --profile core --profile dashboard exec -T -w /work/project charts dct render charts/$board.yml --format html -o - > dashboard/charts/renders/$board.html; done
+
+  mcp:build:
+    desc: Build the dbt-mcp image (Claude starts it over stdio, so build first)
+    deps: [env]
+    cmds:
+      # Mountpoints for the writable artifact volume inside the read-only project.
+      - mkdir -p transform/dbt/target transform/dbt/target_mcp
+      - docker compose --profile core --profile mcp build dbt-mcp
+
+  mcp:smoke:
+    desc: "Talk MCP to dbt-mcp over stdio: list tools, ask for the top browsers"
+    deps: [mcp:build]
+    cmds:
+      - uv run python scripts/mcp_smoke.py
+
+  mcp:claude:
+    desc: Build dbt-mcp and print the Claude Code and Claude Desktop setup
+    deps: [mcp:build]
+    silent: true
+    vars:
+      DOCKER_BIN:
+        sh: command -v docker
+    cmds:
+      - |
+        cat <<EOF
+        Claude Code: .mcp.json at the repo root registers server "dbt" (project
+        scope). Start \`claude\` from the repo root, approve the server, then
+        check it with \`claude mcp list\` or /mcp.
+
+        Claude Desktop: merge this into
+        ~/Library/Application Support/Claude/claude_desktop_config.json
+        (this task does not edit it), then restart Claude Desktop.
+
+        {
+          "mcpServers": {
+            "dbt": {
+              "command": "{{.DOCKER_BIN}}",
+              "args": [
+                "compose",
+                "-f", "{{.ROOT_DIR}}/docker-compose.yml",
+                "--project-directory", "{{.ROOT_DIR}}",
+                "--profile", "core", "--profile", "mcp",
+                "run", "--rm", "-i", "--no-TTY", "dbt-mcp"
+              ],
+              "env": {"PATH": "{{dir .DOCKER_BIN}}:/usr/bin:/bin"}
+            }
+          }
+        }
+        EOF
+
+  lint:
+    desc: Ruff check, format check, lockfile checks (all three projects), dbt description coverage and a static board check
+    cmds:
+      - task: dbt:coverage
+      - uv run ruff check .
+      - uv run ruff format --check .
+      - uv lock --check
+      - task: charts:lint
+      - task: superset:lock
+
+  charts:lint:
+    desc: Lock check and static board validation (no warehouse; uses the dev manifest from dbt:coverage)
+    dir: dashboard/charts
+    cmds:
+      - uv lock --check
+      - uv run dct validate --dbt-project-dir ../../transform/dbt
+
+  superset:lock:
+    desc: Check the Superset driver lock inside the image (same uv and Python 3.10 as the build)
+    cmds:
+      - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uvcache -v "{{.ROOT_DIR}}/dashboard/superset:/work" -w /work --entrypoint uv apache/superset:6.1.0 lock --check
+
+  fmt:
+    desc: Auto-fix and format with ruff
+    cmds:
+      - uv run ruff check --fix .
+      - uv run ruff format .
+
+  test:
+    desc: Run unit tests (integration tests are deselected)
+    cmds:
+      - uv run pytest
+
+  test:integration:
+    desc: Run integration tests against the dev stack (task up first)
+    deps: [env]
+    cmds:
+      - uv run pytest -m integration
+
+  up:
+    desc: Start the stack for PROFILES (default core,app) and wait for health
+    deps: [env]
+    cmds:
+      - docker compose {{range splitList "," .PROFILES}}--profile {{.}} {{end}}up -d --build --wait
+
+  down:
+    desc: Stop every profile (volumes are kept)
+    cmds:
+      - docker compose --profile '*' down
+
+  reset:
+    desc: Stop every profile, delete volumes and clear dbt artifacts
+    cmds:
+      - docker compose --profile '*' down -v
+      # Keep target/ and target_mcp/ themselves: dbt-mcp needs them as mountpoints.
+      - find transform/dbt/target transform/dbt/target_mcp -mindepth 1 -delete 2>/dev/null || true
+      - rm -rf transform/dbt/logs
+
+  ps:
+    desc: List containers
+    cmds:
+      - docker compose --profile '*' ps
+
+  logs:
+    desc: "Follow logs, e.g. task logs SVC=clickhouse"
+    cmds:
+      - docker compose --profile '*' logs -f {{.SVC}}
+
+  sh:
+    desc: "Open a shell in a container, e.g. task sh SVC=postgres"
+    requires:
+      vars: [SVC]
+    cmds:
+      - docker compose --profile '*' exec {{.SVC}} sh
+
+  psql:
+    desc: "psql as admin, e.g. task psql DB=app -- -c 'select 1'"
+    deps: [env]
+    vars:
+      DB: '{{.DB | default "app"}}'
+    cmds:
+      - docker compose exec -T -e PGPASSWORD="$POSTGRES_ADMIN_PASSWORD" postgres psql -U postgres -d {{.DB}} {{.CLI_ARGS}}
+    interactive: true
+
+  ch:
+    desc: "clickhouse-client as default user, e.g. task ch -- -q 'select 1'"
+    deps: [env]
+    cmds:
+      - docker compose exec -i clickhouse clickhouse-client --password "$CLICKHOUSE_DEFAULT_PASSWORD" {{.CLI_ARGS}}
+    interactive: true
+
+  e2e:
+    desc: "Isolated e2e run (project aictx-e2e); E2E_KEEP=1 skips teardown"
+    vars:
+      PROFILE_FLAGS: '{{range splitList "," .E2E_PROFILES}}--profile {{.}} {{end}}'
+    cmds:
+      # Refresh the dir in place: re-creating it can race the bind mount.
+      - mkdir -p scripts/e2e/.work/users.d
+      - find scripts/e2e/.work/users.d -type f -delete
+      - cp -R infra/clickhouse/users.d/. scripts/e2e/.work/users.d/
+      - defer: |
+          if [ -n "$E2E_KEEP" ]; then echo "E2E_KEEP set: aictx-e2e left running"; else {{.E2E_COMPOSE}} --profile '*' down -v --remove-orphans; fi
+      - '{{.E2E_COMPOSE}} --profile "*" down -v --remove-orphans'
+      - '{{.E2E_COMPOSE}} {{.PROFILE_FLAGS}}up -d --build --wait'
+      - uv run pytest -m e2e scripts/e2e

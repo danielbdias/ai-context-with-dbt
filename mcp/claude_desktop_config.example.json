@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "dbt": {
+      "command": "/usr/local/bin/docker",
+      "args": [
+        "compose",
+        "-f",
+        "/ABSOLUTE/PATH/TO/ai-context-with-dbt/docker-compose.yml",
+        "--project-directory",
+        "/ABSOLUTE/PATH/TO/ai-context-with-dbt",
+        "--profile",
+        "core",
+        "--profile",
+        "mcp",
+        "run",
+        "--rm",
+        "-i",
+        "--no-TTY",
+        "dbt-mcp"
+      ],
+      "env": {
+        "PATH": "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+      }
+    }
+  }
+}

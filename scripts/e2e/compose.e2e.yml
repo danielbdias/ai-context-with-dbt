@@ -1,0 +1,5 @@
+# Overlay for the isolated e2e project: gives ClickHouse its own users.d.
+services:
+  clickhouse:
+    volumes:
+      - ${E2E_CH_USERS_DIR}:/etc/clickhouse-server/users.d

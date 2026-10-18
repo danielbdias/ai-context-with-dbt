@@ -1,0 +1,64 @@
+dashboard_title: Word cloud
+description: null
+css: null
+slug: word-cloud
+certified_by: null
+certification_details: null
+published: true
+uuid: 1f5c284c-04da-4321-b501-9dfdb1142a02
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+    - GRID_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Word cloud
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+    - ROW-word
+    parents:
+    - ROOT_ID
+  ROW-word:
+    type: ROW
+    id: ROW-word
+    children:
+    - CHART-word
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-word:
+    type: CHART
+    id: CHART-word
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-word
+    meta:
+      width: 12
+      height: 60
+      chartId: 1
+      sliceName: Word cloud
+      uuid: b0cb7af6-e374-462c-850f-782520e62384
+metadata:
+  native_filter_configuration: []
+  refresh_frequency: 0
+  timed_refresh_immune_slices: []
+  expanded_slices: {}
+  color_scheme: ''
+  label_colors: {}
+  shared_label_colors: []
+  map_label_colors: {}
+  color_scheme_domain: []
+  cross_filters_enabled: true
+theme_uuid: null
+version: 1.0.0

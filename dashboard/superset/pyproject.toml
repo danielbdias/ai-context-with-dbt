@@ -1,0 +1,23 @@
+[project]
+name = "aictx-superset"
+version = "0.1.0"
+description = "ClickHouse driver for the Superset image (own lock, installed into /app/.venv)."
+# Superset 6.1.0 runs on CPython 3.10. It declares its ClickHouse extra as
+# clickhouse-connect>=0.13.0,<1.0, and its postgres extra as psycopg2-binary
+# 2.9.9. The image has neither driver, so both come in here.
+requires-python = ">=3.10,<3.11"
+dependencies = ["clickhouse-connect==0.15.1", "psycopg2-binary==2.9.9"]
+
+[tool.uv]
+package = false
+# Shared with the Superset image: keep them at the image's versions so
+# `uv sync --inexact` only adds lz4 and clickhouse-connect and never moves
+# packages Superset depends on.
+constraint-dependencies = [
+    "cffi==2.0.0",
+    "certifi==2025.6.15",
+    "pycparser==2.22",
+    "pytz==2025.2",
+    "urllib3==2.6.3",
+    "zstandard==0.23.0",
+]

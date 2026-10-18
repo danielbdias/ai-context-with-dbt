@@ -1,0 +1,12 @@
+# dbt Charts project. Each board in charts/ is served at /<file name>/.
+# The warehouse is the dbt profile `aictx`, target `charts` (charts_reader,
+# read-only). Credentials come from the environment, never from this file.
+sources:
+  warehouse:
+    type: dbt_profile
+    profile: aictx
+    target: charts
+
+server:
+  debug: false
+  nav: true

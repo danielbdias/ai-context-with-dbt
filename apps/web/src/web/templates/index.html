@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo submissions</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="banner" role="alert">
+    DEMO ONLY &mdash; do not enter personal data
+  </div>
+  <main>
+    <h1>Leave a message</h1>
+    {% if ok %}
+      <p class="flash ok" role="status">Thanks! Your message was saved.</p>
+    {% endif %}
+    {% if error %}
+      <p class="flash error" role="alert">{{ error }}</p>
+    {% endif %}
+    <form method="post" action="/">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password"
+             autocomplete="off" required>
+      <label for="message">Message (max {{ max_length }} characters)</label>
+      <textarea id="message" name="message" rows="5"
+                maxlength="{{ max_length }}" required>{{ message }}</textarea>
+      <button type="submit">Submit</button>
+    </form>
+  </main>
+</body>
+</html>

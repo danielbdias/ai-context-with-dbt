@@ -1,0 +1,8 @@
+{{ config(materialized='table', order_by='os') }}
+
+select
+    os,
+    count() as submissions_count,
+    round(100 * count() / sum(count()) over (), 2) as pct
+from {{ ref('fct_submissions') }}
+group by os

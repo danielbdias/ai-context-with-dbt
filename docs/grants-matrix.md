@@ -52,7 +52,7 @@ v2 has no `grants:` support, so this is also the only option.
 | User | raw | raw_staging | staging | marts | system tables |
 |---|---|---|---|---|---|
 | `default` | admin | admin | admin | admin | all (init and tests only) |
-| `el_loader` | CREATE TABLE, DROP TABLE, INSERT, SELECT, ALTER, TRUNCATE | same | none | none | SELECT `tables`, `columns`, `databases` |
+| `el_loader` | CREATE TABLE, DROP TABLE, INSERT, SELECT, ALTER, TRUNCATE | same | none | none | SELECT `tables`, `columns`, `databases`, `INFORMATION_SCHEMA.COLUMNS` |
 | `dbt_runner` | SELECT | none | CREATE TABLE/VIEW, DROP TABLE/VIEW, INSERT, SELECT, ALTER, TRUNCATE | same as staging | SELECT `tables`, `columns`, `databases`, `settings`, `functions` |
 | `mcp_reader` | none | none | none | SELECT | none |
 | `charts_reader` | none | none | none | SELECT | none |
@@ -63,6 +63,12 @@ Notes:
   `ALTER DELETE/UPDATE` (merge).
 - `dbt_runner` can run `EXCHANGE TABLES` in `staging` and `marts` with the
   grants above.
+- dlt's ClickHouse destination uses ONE database per pipeline, so it puts
+  merge staging tables next to the final table: `raw.submissions` plus
+  `raw.stg___submissions` (and its own `raw.stg____dlt_version`,
+  `raw.stg___dlt_sentinel_table`). `raw_staging` stays created and granted but
+  dlt does not use it. Merge runs `DELETE FROM raw.submissions WHERE id IN
+  (...)` (lightweight delete, synchronous by default), covered by `ALTER`.
 - `system.tables` and `system.columns` only list objects the user can see, so
   `dbt_runner` and `el_loader` never see `request_metadata` or `auth_attempts`
   (those never reach ClickHouse).

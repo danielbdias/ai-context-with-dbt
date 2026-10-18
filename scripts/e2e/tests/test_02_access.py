@@ -287,6 +287,7 @@ def test_el_loader_grants() -> None:
         assert tables[0][0] >= 1
         ch_query("SELECT count() FROM system.columns", **creds)
         ch_query("SELECT count() FROM system.databases", **creds)
+        ch_query("SELECT count() FROM INFORMATION_SCHEMA.COLUMNS", **creds)
     finally:
         ch_command("DROP TABLE IF EXISTS raw.e2e_probe", **creds)
     for sql in (

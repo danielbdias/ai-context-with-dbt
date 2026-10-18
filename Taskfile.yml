@@ -59,6 +59,12 @@ tasks:
     cmds:
       - uv run python -m scripts.seed
 
+  el:
+    desc: Run the dlt EL one-shot (Postgres submissions -> ClickHouse raw)
+    deps: [env]
+    cmds:
+      - docker compose --profile core --profile el run --rm --build el
+
   lint:
     desc: Ruff check, format check and lockfile check
     cmds:

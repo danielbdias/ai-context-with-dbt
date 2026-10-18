@@ -15,6 +15,18 @@ task e2e E2E_PROFILES=core,app,el    # extra compose profiles (default core,app)
 `e2e.env` holds test-only credentials and ports. It replaces `.env` for this
 project. The suite is marked `e2e` and is excluded from `task test`.
 
+## Stages
+
+| File | Covers |
+|---|---|
+| `test_01_health.py` | Stack healthy |
+| `test_02_access.py` | Grants matrix |
+| `test_03_submissions.py` | Web app writes and rejections |
+| `test_04_el.py` | dlt: idempotent reruns, soft delete, no aux tables, fails when ClickHouse is down |
+
+`run_el(env=None)` builds and runs the EL one-shot (profile `el` is not in
+`E2E_PROFILES`: `up --wait` must not start a one-shot) and returns the process.
+
 ## Add a stage
 
 1. Add `scripts/e2e/tests/test_NN_<name>.py` (files run in name order).

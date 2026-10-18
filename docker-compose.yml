@@ -109,6 +109,31 @@ services:
     mem_limit: 256m
     networks: [backend]
 
+  el:
+    image: aictx-el:local
+    build:
+      context: .
+      dockerfile: apps/el/Dockerfile
+    profiles: [el]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_EL_READER_PASSWORD: ${POSTGRES_EL_READER_PASSWORD}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_NATIVE_PORT: "9000"
+      CLICKHOUSE_HTTP_PORT: "8123"
+      CLICKHOUSE_EL_LOADER_PASSWORD: ${CLICKHOUSE_EL_LOADER_PASSWORD}
+      EL_MAX_ATTEMPTS: ${EL_MAX_ATTEMPTS:-3}
+      EL_RETRY_DELAY_SECONDS: ${EL_RETRY_DELAY_SECONDS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 512m
+    networks: [backend]
+
 networks:
   backend:
 

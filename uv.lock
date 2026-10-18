@@ -728,10 +728,16 @@ version = "0.1.0"
 source = { editable = "apps/el" }
 dependencies = [
     { name = "dlt", extra = ["clickhouse", "postgres", "sql-database"] },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic-settings" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "dlt", extras = ["clickhouse", "postgres", "sql-database"], specifier = "==1.31.0" }]
+requires-dist = [
+    { name = "dlt", extras = ["clickhouse", "postgres", "sql-database"], specifier = "==1.31.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
+    { name = "pydantic-settings", specifier = ">=2.14.2" },
+]
 
 [[package]]
 name = "fastapi"

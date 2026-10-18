@@ -105,6 +105,22 @@ def compose_run(service: str, *args: str, profiles: Sequence[str] = ()) -> str:
     return compose("run", "--rm", "-T", service, *args, profiles=profiles).stdout
 
 
+def run_el(
+    env: Mapping[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run the EL one-shot (building it first) and return the finished process.
+
+    Never raises on a non-zero exit: callers assert on `returncode`. `env`
+    overrides container variables, e.g. a bogus `CLICKHOUSE_HOST`.
+    """
+    profiles = ("core", "el")
+    compose("build", "el", profiles=profiles)
+    flags = [
+        arg for key, value in (env or {}).items() for arg in ("-e", f"{key}={value}")
+    ]
+    return compose("run", "--rm", "-T", *flags, "el", profiles=profiles, check=False)
+
+
 def container_health() -> dict[str, str]:
     """Map compose service name to its health status (or state if no check)."""
     out = compose("ps", "--all", "--format", "{{.Service}} {{.Health}}").stdout

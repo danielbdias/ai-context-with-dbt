@@ -35,6 +35,8 @@ GRANT CREATE TABLE, DROP TABLE, INSERT, SELECT, ALTER, TRUNCATE ON raw_staging.*
 GRANT SELECT ON system.tables TO el_loader;
 GRANT SELECT ON system.columns TO el_loader;
 GRANT SELECT ON system.databases TO el_loader;
+-- dlt reads column metadata of its tables through information_schema.
+GRANT SELECT ON INFORMATION_SCHEMA.COLUMNS TO el_loader;
 
 -- dbt_runner: reads raw, owns staging and marts.
 GRANT SELECT ON raw.* TO dbt_runner;

@@ -14,6 +14,13 @@ vars:
     --target {{.TARGET}}{{if .TARGET_PATH}} --target-path {{.TARGET_PATH}}{{end}}
   # Compose profiles started by `e2e`. One-shots (el, dbt, mcp) run per test.
   E2E_PROFILES: core,app
+  # Marp one-shot for presentation/. The image carries its own Chromium, and
+  # MARP_USER makes the rendered file land with the host user's ownership.
+  MARP: >-
+    docker run --rm --init
+    -v "{{.ROOT_DIR}}/presentation:/home/marp/app"
+    -e MARP_USER="$(id -u):$(id -g)"
+    marpteam/marp-cli:v4.5.1
   # `env` makes the e2e values win over the dev .env that task loads.
   E2E_COMPOSE: >-
     env $(grep -v '^#' scripts/e2e/e2e.env | xargs)
@@ -148,6 +155,14 @@ tasks:
       - docker compose --profile core --profile dashboard up -d --build --wait charts
       - mkdir -p dashboard/charts/renders
       - for board in overview words; do docker compose --profile core --profile dashboard exec -T -w /work/project charts dct render charts/$board.yml --format html -o - > dashboard/charts/renders/$board.html; done
+
+  presentation:pdf:
+    desc: "Render the markdown presentation to PDF, e.g. task presentation:pdf SLIDES=other.md"
+    vars:
+      SLIDES: '{{.SLIDES | default "de-data-ingestion-a-context-engineering.md"}}'
+    cmds:
+      # --allow-local-files lets the slides pull in images from presentation/.
+      - '{{.MARP}} --pdf --allow-local-files {{.SLIDES}}'
 
   mcp:build:
     desc: Build the dbt-mcp image (Claude starts it over stdio, so build first)

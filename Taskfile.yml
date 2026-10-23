@@ -164,6 +164,16 @@ tasks:
       # --allow-local-files lets the slides pull in images from presentation/.
       - '{{.MARP}} --pdf --allow-local-files {{.SLIDES}}'
 
+  presentation:html:
+    desc: "Render the presentation to a single self-contained HTML (GIFs animate)"
+    vars:
+      SLIDES: '{{.SLIDES | default "de-data-ingestion-a-context-engineering.md"}}'
+      DECK: '{{trimSuffix ".md" .SLIDES}}.html'
+    cmds:
+      - '{{.MARP}} --allow-local-files -o {{.DECK}} {{.SLIDES}}'
+      # Marp leaves images as paths, so fold them in to get one portable file.
+      - uv run python scripts/inline_presentation_assets.py presentation/{{.DECK}}
+
   mcp:build:
     desc: Build the dbt-mcp image (Claude starts it over stdio, so build first)
     deps: [env]

@@ -60,9 +60,11 @@ ENTRYPOINT ["dbt"]
 CMD ["build"]
 
 FROM base AS dbt-mcp
-# dbt-mcp over stdio, read-only: target `mcp` (mcp_reader) and an allowlist of
-# six tools. Allowlist mode (DBT_MCP_ENABLE_TOOLS) registers nothing else, so
-# build/run/test/clone/docs and every dbt platform tool are absent.
+# dbt-mcp over stdio, read-only. Local tools run against target `mcp`
+# (mcp_reader). The Semantic Layer tools call the dbt platform and need
+# DBT_HOST, DBT_TOKEN and DBT_PROD_ENV_ID (docs/semantic-layer.md). Allowlist
+# mode (DBT_MCP_ENABLE_TOOLS) registers nothing else, so build/run/test/clone/
+# docs and the Discovery, Admin API and SQL tools are absent.
 # Artifacts go to target_mcp/. `get_lineage_dev` reads target/manifest.json
 # (hard-coded in dbt-mcp), so compose mounts the same volume at both paths.
 # stdout carries JSON-RPC only: dbt-mcp logs to stderr. DBT_QUIET keeps dbt's
@@ -73,10 +75,11 @@ ENV DBT_PATH=/app/.venv/bin/dbt \
     DBT_LOG_PATH=/tmp/dbt-logs \
     DBT_QUIET=true \
     DBT_CLI_TIMEOUT=60 \
-    DBT_MCP_ENABLE_TOOLS=show,list,compile,parse,get_node_details_dev,get_lineage_dev \
+    DBT_MCP_ENABLE_TOOLS=show,list,compile,parse,get_node_details_dev,get_lineage_dev,list_metrics,get_dimensions,get_entities,get_dimension_values,query_metrics,get_metrics_compiled_sql \
     DBT_MCP_LOG_LEVEL=INFO \
     DBT_ENGINE_NO_WARN_SEMANTIC_MANIFEST_VALIDATION=1 \
     DISABLE_MCP_APPS=true \
     DO_NOT_TRACK=1 \
     MCP_TRANSPORT=stdio
-ENTRYPOINT ["dbt-mcp"]
+COPY --chmod=755 transform/mcp-entrypoint.sh /usr/local/bin/mcp-entrypoint
+ENTRYPOINT ["mcp-entrypoint"]

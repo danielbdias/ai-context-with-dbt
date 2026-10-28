@@ -4,7 +4,96 @@ title: "From data ingestion to context engineering"
 description: "Building reliable AI agent contexts with dbt"
 author: Daniel Dias
 paginate: true
+style: |
+  section.split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    column-gap: 2rem;
+    align-content: start;
+  }
+  section.split h1 {
+    grid-column: 1 / -1;
+  }
+  section.split figure,
+  section.split p:has(> img:only-child) {
+    margin: 0;
+    align-self: center;
+  }
+  section.split img {
+    width: 100%;
+    max-height: 440px;
+    object-fit: contain;
+  }
+  section.diagram {
+    display: flex;
+    flex-direction: column;
+  }
+  section.diagram .mermaid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 0.5rem;
+  }
+  section.diagram .mermaid svg {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+  }
+  section.media {
+    display: flex;
+    flex-direction: column;
+  }
+  section.media p:has(> img:only-child),
+  section.media .media-frame {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+  }
+  /* PDF cannot animate a GIF, so the print build swaps in a still frame. */
+  .only-print {
+    display: none;
+  }
+  @media print {
+    .only-screen {
+      display: none;
+    }
+    .only-print {
+      display: block;
+    }
+  }
+  section.media img {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+  }
 ---
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "neutral",
+    fontFamily: "Helvetica, Arial, sans-serif",
+    // Marp's PDF export drops glyphs from Mermaid's HTML (foreignObject)
+    // labels, so render every label as plain SVG text instead. Node labels
+    // read the top-level flag; subgraph titles read the flowchart one.
+    htmlLabels: false,
+    flowchart: {
+      htmlLabels: false,
+      useMaxWidth: false,
+      nodeSpacing: 22,
+      rankSpacing: 55,
+      wrappingWidth: 280,
+    },
+  });
+</script>
 
 # From data ingestion to context engineering
 
@@ -12,18 +101,26 @@ Building reliable AI agent contexts with dbt
 
 ---
 
+<!-- _class: split -->
+
 # Daniel Dias
 
-**Senior Software Engineer, dbt Labs**
+![Daniel Dias photo](./images/daniel-2026.jpg)
+
+<div>
+
+**Senior Software Engineer, Fivetran + dbt Labs**
 
 PhD candidate in AI at USP, passionate about building dev tools
 
 - LinkedIn: [@danielbdias](https://linkedin.com/in/danielbdias)
 - Github: [@danielbdias](https://github.com/danielbdias)
 
-<!-- Photo: Daniel-2026.JPG -->
+</div>
 
 ---
+
+<!-- _class: diagram -->
 
 # A challenge: data changes at a hospital
 
@@ -31,15 +128,25 @@ We have an ETL process that extracts and streams data into the hospital's data
 lake. That lets the analysts produce strategic reports.
 **The process works perfectly!**
 
-```
-Sources                                 ETL pipeline
-──────────────────────────────────      ─────────────────────────────────────
-Patient records                     ┐
-Accounting data between health      │
-  plans and the hospital            ├──▶ Extract ──▶ Transform ──▶ Load ──▶ Data Warehouse
-Local databases with exam results   │
-…                                   ┘
-```
+<div class="mermaid">
+flowchart LR
+  subgraph sources["Sources"]
+    direction TB
+    records["Patient records"]
+    accounting["Accounting data between<br/>health plans and the hospital"]
+    exams["Local databases with<br/>exam results"]
+    more["…"]
+  end
+  subgraph etl["ETL pipeline"]
+    direction LR
+    extract["Extract"] --> transform["Transform"] --> load["Load"]
+  end
+  records --> extract
+  accounting --> extract
+  exams --> extract
+  more --> extract
+  load --> warehouse[("Data Warehouse")]
+</div>
 
 ---
 
@@ -48,21 +155,38 @@ Local databases with exam results   │
 A regulator recently asked for additional data in those reports, including
 traceable **Personally Identifiable Information (PII)**.
 
-```
-Sources                                 ETL pipeline
-──────────────────────────────────      ─────────────────────────────────────
-Patient records                     ┐
-Accounting data between health      │
-  plans and the hospital            ├──▶ Extract ──▶ Transform ──▶ Load ──▶ Data Warehouse
-Local databases with exam results   │                ⚠️
-…                                   ┘
-```
+<div class="mermaid">
+flowchart LR
+  subgraph sources["Sources"]
+    direction TB
+    records["Patient records"]
+    accounting["Accounting data between<br/>health plans and the hospital"]
+    exams["Local databases with<br/>exam results"]
+    more["…"]
+  end
+  subgraph etl["ETL pipeline"]
+    direction LR
+    extract["Extract"] --> transform["Transform ⚠️"] --> load["Load"]
+  end
+  records --> extract
+  accounting --> extract
+  exams --> extract
+  more --> extract
+  load --> warehouse[("Data Warehouse")]
+</div>
 
 ---
 
+<!-- _class: media -->
+
 # The data engineers' reaction to the news
 
-<!-- GIF: a hamster is standing on its hind legs on a trampoline and says "duhn duhn duhhnn !!!" -->
+<div class="media-frame">
+  <img class="only-screen" src="./images/dramatic-chipmunk.gif"
+       alt="A chipmunk turns to the camera as the music stings" />
+  <img class="only-print" src="./images/dramatic-chipmunk-still.png"
+       alt="A chipmunk turns to the camera as the music stings" />
+</div>
 
 ---
 
@@ -72,41 +196,69 @@ Because the transformation is coupled to the extraction, we have to build
 separate transformation routines just for the new data, and spend days or weeks
 running the job.
 
-```
-Sources                                 ETL pipeline
-──────────────────────────────────      ─────────────────────────────────────
-Patient records                     ┐
-Accounting data between health      │
-  plans and the hospital            ├──▶ Extract ──▶ Transform ──▶ Load ──▶ Data Warehouse
-Local databases with exam results   │      ▲─────────────▲
-…                                   ┘      coupled: rework
-```
+<div class="mermaid">
+flowchart LR
+  subgraph sources["Sources"]
+    direction TB
+    records["Patient records"]
+    accounting["Accounting data between<br/>health plans and the hospital"]
+    exams["Local databases with<br/>exam results"]
+    more["…"]
+  end
+  subgraph etl["ETL pipeline"]
+    direction LR
+    extract["Extract"] --> transform["Transform ⚠️"] --> load["Load"]
+  end
+  records --> extract
+  accounting --> extract
+  exams --> extract
+  more --> extract
+  load --> warehouse[("Data Warehouse")]
+  extract -- coupled: rework --> transform
+</div>
 
 ---
 
+<!-- _class: media -->
+
 # The data engineers' reaction, take two
 
-<!-- GIF: a man in a suit and tie is saying "no ! god ! please ! no ." -->
+<div class="media-frame">
+  <img class="only-screen" src="./images/god-please-no.gif"
+       alt="A man in a suit recoils in horror, captioned 'NO GOD PLEASE NO! NOOO! NOOO!'" />
+  <img class="only-print" src="./images/god-please-no-still.png"
+       alt="A man in a suit recoils in horror, captioned 'NO GOD PLEASE NO! NOOO! NOOO!'" />
+</div>
 
 ---
 
 # Thinking about ETL
 
-```
-Sources                                 ETL pipeline
-──────────────────────────────────      ─────────────────────────────────────
-Patient records                     ┐
-Accounting data between health      │
-  plans and the hospital            ├──▶ Extract ──▶ Transform ──▶ Load ──▶ Data Warehouse
-Local databases with exam results   │
-…                                   ┘
-```
-
-ETL is a process optimized for loading and structuring data before it reaches
+- ETL is a process optimized for loading and structuring data before it reaches
 the data warehouse.
 
-But it can be inflexible in some scenarios, creating more work for the data
+- But it can be inflexible in some scenarios, creating more work for the data
 team.
+
+<div class="mermaid">
+flowchart LR
+  subgraph sources["Sources"]
+    direction TB
+    records["Patient records"]
+    accounting["Accounting data between<br/>health plans and the hospital"]
+    exams["Local databases with<br/>exam results"]
+    more["…"]
+  end
+  subgraph etl["ETL pipeline"]
+    direction LR
+    extract["Extract"] --> transform["Transform"] --> load["Load"]
+  end
+  records --> extract
+  accounting --> extract
+  exams --> extract
+  more --> extract
+  load --> warehouse[("Data Warehouse")]
+</div>
 
 ---
 
@@ -116,23 +268,38 @@ team.
 
 # Enter ELT!
 
-<!-- Image: ETL vs. ELT comparison -->
+![](./images/etl-vs-elt.png)
 
 Source: <https://www.dio.me/articles/a-importancia-do-elt-e-etl-no-processo-de-engenharia-de-dados>
 
 ---
 
+<!-- _class: diagram -->
+
 # A new workflow for the problem
 
-```
-Sources                                 ELT pipeline
-──────────────────────────────────      ─────────────────────────────────────
-Patient records                     ┐
-Accounting data between health      │
-  plans and the hospital            ├──▶ Extract & Load ──▶ Data warehouse ──▶ Transform
-Local databases with exam results   │                            ▲─────────────────┘
-…                                   ┘                      transformation in the warehouse
-```
+<div class="mermaid">
+flowchart LR
+  subgraph sources["Sources"]
+    direction TB
+    records["Patient records"]
+    accounting["Accounting data between<br/>health plans and the hospital"]
+    exams["Local databases with<br/>exam results"]
+    more["…"]
+  end
+  subgraph elt["ELT pipeline"]
+    direction LR
+    extract["Extract and Load"] --> warehouse[("Data warehouse")]
+    warehouse --> transform["Transform"]
+    transform --> warehouse
+  end
+  records --> extract
+  accounting --> extract
+  exams --> extract
+  more --> extract
+</div>
+
+The transformation now runs **inside the warehouse**.
 
 ---
 
@@ -164,6 +331,7 @@ It currently comes in two editions:
 # How dbt interacts with the data ecosystem
 
 <!-- Image: diagram of dbt within the data ecosystem -->
+![](./images/dbt-in-data-space.png)
 
 ---
 
@@ -236,9 +404,7 @@ The project can be **tested** so your data ships to production safely.
 
 # ELT run with dbt
 
-<!-- Image: full ELT pipeline run with dbt -->
-
-> Speaker note: how to structure data engineering best practices.
+![](./images/elt-via-dbt.png)
 
 ---
 

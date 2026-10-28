@@ -1,0 +1,3 @@
+# Raw HTML is needed so the decks can embed Mermaid diagrams: the <script> tag
+# that loads Mermaid is escaped away under Marp's default sanitization.
+html: true

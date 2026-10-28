@@ -418,7 +418,7 @@ flowchart LR
   dlt --> raw[("ClickHouse raw")]
   raw --> dbt["dbt<br/>transform/dbt"]
   dbt --> marts[("marts")]
-  marts --> charts["dbt Charts<br/>Superset"]
+  marts --> charts["dbt Charts"]
   marts --> mcp["dbt MCP<br/>Claude"]
 </div>
 

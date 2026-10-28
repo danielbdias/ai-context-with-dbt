@@ -2,7 +2,7 @@
 
 Local, Dockerized ELT demo that AI agents can query. Flow: Postgres app
 (FastAPI form) -> dlt -> ClickHouse `raw` -> dbt v2 `staging` and `marts` ->
-dbt Charts, a Superset word cloud and a read-only dbt MCP server for Claude.
+dbt Charts and a read-only dbt MCP server for Claude.
 
 > **DEMO ONLY.** The form password `dssbr` is intentionally insecure. Every
 > port binds to 127.0.0.1. Never expose a port or reuse the value.
@@ -18,7 +18,6 @@ ChatGPT, public MCP endpoints and the dbt Semantic Layer are out of scope.
 | `transform` | uv package and image for dbt 2.0.8 and dbt-mcp |
 | `transform/dbt` | The dbt project: `models/{staging,intermediate,marts}`, `macros`, `seeds`, `tests`, `profiles.yml` (targets `dev`, `ci`, `mcp`, `charts`) |
 | `dashboard/charts` | dbt Charts boards (`overview`, `words`); own `uv.lock` and image |
-| `dashboard/superset` | Word cloud provisioned from the committed `bundle/`; own `uv.lock` |
 | `infra` | Postgres and ClickHouse init scripts, ClickHouse guardrail config |
 | `mcp` | Claude Code and Desktop setup (`.mcp.json` at the root registers `dbt`) |
 | `scripts` | `seed.py`, `mcp_smoke.py`, `check_dbt_descriptions.py`, `e2e/` suite |
@@ -27,7 +26,7 @@ ChatGPT, public MCP endpoints and the dbt Semantic Layer are out of scope.
 | `presentation` | Marp markdown decks |
 
 The root `pyproject.toml` is a uv workspace of `apps/web`, `apps/el` and
-`transform`. `dashboard/*` are excluded and have their own locks.
+`transform`. `dashboard/charts` is excluded and has its own lock.
 
 ## Commands
 
@@ -40,7 +39,7 @@ task up             # Postgres, ClickHouse, migrations, web; waits for health
 task seed           # POST sample good and bad submissions
 task el             # dlt: Postgres -> ClickHouse raw
 task dbt:build      # seeds, models, tests (-- --select mart_word_frequencies+)
-task dashboard      # dbt Charts + Superset
+task dashboard      # dbt Charts
 task mcp:smoke      # talk MCP to dbt-mcp over stdio, no GUI
 task down           # stop, keep data
 task reset          # stop, delete volumes and dbt artifacts

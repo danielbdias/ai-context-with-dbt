@@ -11,7 +11,7 @@ package = false
 [tool.uv.workspace]
 members = ["apps/web", "apps/el", "transform"]
 # Own locks, own images: see dashboard/*/pyproject.toml.
-exclude = ["dashboard/charts", "dashboard/superset"]
+exclude = ["dashboard/charts"]
 
 [tool.uv.sources]
 web = { workspace = true }
@@ -52,7 +52,6 @@ testpaths = [
     "apps/web/tests",
     "apps/el/tests",
     "transform/tests",
-    "dashboard/superset/tests",
 ]
 addopts = "-ra -m 'not integration and not e2e'"
 pythonpath = ["."]

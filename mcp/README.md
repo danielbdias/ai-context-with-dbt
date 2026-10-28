@@ -29,7 +29,8 @@ task mcp:claude    # prints the setup below with this machine's paths
 
 The Semantic Layer tools also need the dbt platform. Do
 [docs/semantic-layer.md](../docs/semantic-layer.md) first, then put
-`DBT_HOST`, `DBT_TOKEN` and `DBT_PROD_ENV_ID` in `.env`. Without them the
+`DBT_HOST`, `DBT_TOKEN` and `DBT_PROD_ENV_ID` in `.env`, plus `DBT_HOST_PREFIX`
+when the host looks like `<prefix>.<cell>.dbt.com`. Without them the
 server still starts and `show` works, but the metric tools return an error.
 
 `task mcp:claude` changes no Claude config. It only builds and prints.
@@ -166,5 +167,8 @@ mountpoint inside a read-only bind mount.
   entrypoint (`transform/mcp-entrypoint.sh`) unsets empty `DBT_*` variables,
   because dbt-mcp crashes on an empty `DBT_PROD_ENV_ID`.
 - A `Timeout waiting for LSP server to connect` line on shutdown is harmless.
+- `Name or service not known` or `name resolver error: produced zero addresses`
+  from a metric tool: dbt-mcp built a host that does not exist. Set
+  `DBT_HOST_PREFIX` to the first label of `DBT_HOST` (docs/semantic-layer.md).
 - `403 Forbidden` from the platform: the token has the wrong permission sets, or
   your account restricts IP addresses and needs the host's address allowed.

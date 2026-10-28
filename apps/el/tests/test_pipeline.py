@@ -1,5 +1,6 @@
 """Pipeline wiring and retry logic: no network."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -12,7 +13,8 @@ from el.settings import Settings
 @pytest.fixture
 def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("POSTGRES_EL_READER_PASSWORD", "pg")
-    monkeypatch.setenv("CLICKHOUSE_EL_LOADER_PASSWORD", "ch")
+    monkeypatch.setenv("SNOWFLAKE_ACCOUNT", "org-acct")
+    monkeypatch.setenv("SNOWFLAKE_EL_LOADER_PASSWORD", "sf")
     return Settings()  # type: ignore[call-arg]
 
 
@@ -33,11 +35,13 @@ def test_resource_selects_only_submissions_incrementally(
     assert cursor.lag == 5
 
 
-def test_destination_is_clickhouse_with_staging_layout(settings: Settings) -> None:
+def test_destination_is_snowflake_loading_into_raw(
+    settings: Settings, tmp_path: Path
+) -> None:
     destination = pipeline.build_destination(settings)
-    config = destination.config_params
-    assert destination.destination_name == "clickhouse"
-    assert config["staging_dataset_name_layout"] == "stg"
+    assert destination.destination_name == "snowflake"
+    built = pipeline.build_pipeline(settings, str(tmp_path))
+    assert built.dataset_name == "raw"
 
 
 def _failure() -> PipelineStepFailed:
@@ -72,12 +76,13 @@ def test_retries_exhausted_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(calls) == 2
 
 
-def test_main_returns_nonzero_when_destination_is_down(
-    monkeypatch: pytest.MonkeyPatch,
+def test_main_returns_nonzero_when_the_load_fails(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("POSTGRES_EL_READER_PASSWORD", "pg")
-    monkeypatch.setenv("CLICKHOUSE_EL_LOADER_PASSWORD", "ch")
-    monkeypatch.setenv("CLICKHOUSE_HOST", "127.0.0.1")
-    monkeypatch.setenv("CLICKHOUSE_NATIVE_PORT", "1")
     monkeypatch.setenv("EL_MAX_ATTEMPTS", "1")
+
+    def unreachable(*_: object) -> None:
+        raise _failure()
+
+    monkeypatch.setattr(pipeline, "run_once", unreachable)
     assert pipeline.main() == 1

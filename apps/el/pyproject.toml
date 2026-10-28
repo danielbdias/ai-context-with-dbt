@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "el member of the ai-context-with-dbt demo."
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "dlt[clickhouse,postgres,sql-database]==1.31.0",
+    "dlt[snowflake,postgres,sql-database]==1.31.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.14.2",
 ]

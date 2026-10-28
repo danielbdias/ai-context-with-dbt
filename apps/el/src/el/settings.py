@@ -7,7 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
 PG_ROLE = "el_reader"
-CH_ROLE = "el_loader"
+SNOWFLAKE_USER = "EL_LOADER"
+SNOWFLAKE_ROLE = "AICTX_EL_LOADER"
+SNOWFLAKE_WAREHOUSE = "AICTX_LOAD_WH"
+SNOWFLAKE_DATASET = "raw"
 
 
 class Settings(BaseSettings):
@@ -19,12 +22,9 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     postgres_db: str = "app"
     postgres_el_reader_password: SecretStr
-    clickhouse_host: str = "127.0.0.1"
-    clickhouse_native_port: int = 9000
-    clickhouse_http_port: int = 8123
-    clickhouse_database: str = "raw"
-    clickhouse_secure: bool = False
-    clickhouse_el_loader_password: SecretStr
+    snowflake_account: str
+    snowflake_database: str = "AICTX"
+    snowflake_el_loader_password: SecretStr
     el_incremental_lag_seconds: int = 5
     el_max_attempts: int = 3
     el_retry_delay_seconds: float = 5.0
@@ -42,14 +42,13 @@ def postgres_url(settings: Settings) -> str:
     ).render_as_string(hide_password=False)
 
 
-def clickhouse_credentials(settings: Settings) -> dict[str, Any]:
-    """Credentials dict for dlt's ClickHouse destination."""
+def snowflake_credentials(settings: Settings) -> dict[str, Any]:
+    """Credentials dict for dlt's Snowflake destination (`host` is the account)."""
     return {
-        "host": settings.clickhouse_host,
-        "port": settings.clickhouse_native_port,
-        "http_port": settings.clickhouse_http_port,
-        "username": CH_ROLE,
-        "password": settings.clickhouse_el_loader_password.get_secret_value(),
-        "database": settings.clickhouse_database,
-        "secure": int(settings.clickhouse_secure),
+        "host": settings.snowflake_account,
+        "database": settings.snowflake_database,
+        "username": SNOWFLAKE_USER,
+        "password": settings.snowflake_el_loader_password.get_secret_value(),
+        "warehouse": SNOWFLAKE_WAREHOUSE,
+        "role": SNOWFLAKE_ROLE,
     }

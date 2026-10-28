@@ -20,8 +20,4 @@ charts:
       orientation: horizontal
 
 rows:
-  - text: |
-      The word cloud is a native Superset chart:
-      [open the word cloud](http://127.0.0.1:__SUPERSET_PORT__/login/?next=http://127.0.0.1:__SUPERSET_PORT__/superset/dashboard/word-cloud/)
-      (Superset asks for the admin login from `.env` first).
   - top_words

@@ -87,6 +87,12 @@ tasks:
       - sh: test -n "$SNOWFLAKE_ACCOUNT"
         msg: Set SNOWFLAKE_ACCOUNT in .env (see .env.example), then run task snowflake:setup once
 
+  seed:history:
+    desc: Backfill about 60 days of backdated submissions in Postgres (run task el afterwards)
+    deps: [env]
+    cmds:
+      - uv run python -m scripts.seed_history
+
   el:
     desc: Run the dlt EL one-shot (Postgres submissions -> Snowflake raw)
     deps: [env, snowflake:env]

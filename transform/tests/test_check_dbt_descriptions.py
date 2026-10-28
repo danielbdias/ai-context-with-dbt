@@ -38,3 +38,22 @@ def test_sources_are_checked_and_tests_are_ignored() -> None:
         },
     }
     assert find_problems(manifest) == ["source app.s: missing description"]
+
+
+def test_metrics_saved_queries_and_semantic_parts_are_checked() -> None:
+    manifest = {
+        "metrics": {"m": {"name": "revenue", "description": ""}},
+        "saved_queries": {"q": {"name": "daily", "description": "ok"}},
+        "semantic_models": {
+            "s": {
+                "name": "orders",
+                "description": "Orders.",
+                "dimensions": [{"name": "status", "description": ";"}],
+                "entities": [{"name": "order", "description": "Key."}],
+            }
+        },
+    }
+    assert find_problems(manifest) == [
+        "metric revenue: missing description",
+        "semantic model orders.status: description contains a semicolon",
+    ]

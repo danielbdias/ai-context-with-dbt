@@ -23,6 +23,8 @@ models:
       - name: message
         description: Free text typed by the visitor, up to 280 characters.
       - name: browser
+        dimension:
+          type: categorical
         description: Normalized browser. One of Chrome, Firefox, Safari, Edge, Opera or Other.
         data_tests:
           - not_null
@@ -31,6 +33,8 @@ models:
                 to: ref('mart_browser_distribution')
                 field: browser
       - name: os
+        dimension:
+          type: categorical
         description: Normalized operating system. One of Windows, macOS, Linux, iOS, Android or Other.
         data_tests:
           - not_null
@@ -47,6 +51,82 @@ models:
         description: Calendar day of created_at in UTC. Use it for per-day questions.
       - name: updated_at
         description: Last change of the submission in Postgres (UTC).
+      - name: is_mobile
+        dimension:
+          type: categorical
+        description: True when the submission came from a phone, meaning the OS is iOS or Android.
+        data_tests: [not_null]
+      - name: message_length
+        description: Number of characters in the message, between 1 and 280.
+        data_tests: [not_null]
+
+    # The Semantic Layer. Every metric below can be sliced by browser, os,
+    # is_mobile and the created_date time dimension (day, week, month, quarter
+    # and year). Ask for them by name through query_metrics instead of writing
+    # SQL. The grain is one row per live submission.
+    metrics:
+      - name: submissions_count
+        type: simple
+        label: Submissions
+        description: Total number of live submissions. The base metric the others build on.
+        agg: count
+        expr: submission_id
+
+      - name: mobile_submissions
+        type: simple
+        label: Mobile submissions
+        description: Live submissions made from a phone (iOS or Android).
+        agg: count
+        expr: submission_id
+        filter: |
+          {{ Dimension('submission__is_mobile') }} = true
+
+      - name: chrome_submissions
+        type: simple
+        label: Chrome submissions
+        description: Live submissions made with Chrome, desktop or mobile.
+        agg: count
+        expr: submission_id
+        filter: |
+          {{ Dimension('submission__browser') }} = 'Chrome'
+
+      - name: avg_message_length
+        type: simple
+        label: Average message length
+        description: Average number of characters per live message.
+        agg: average
+        expr: message_length
+
+      - name: mobile_share
+        type: ratio
+        label: Mobile share
+        description: Fraction of live submissions that came from a phone, between 0 and 1.
+        numerator: mobile_submissions
+        denominator: submissions_count
+
+      - name: cumulative_submissions
+        type: cumulative
+        label: Cumulative submissions
+        description: Running total of live submissions since the first one.
+        input_metric: submissions_count
+
+      - name: submissions_7d_rolling
+        type: cumulative
+        label: Submissions (rolling 7 days)
+        description: Live submissions in the trailing 7 days, today included.
+        input_metric: submissions_count
+        window: 7 days
+
+      - name: submissions_wow_growth
+        type: derived
+        label: Submissions growth week over week
+        description: Percentage change in submissions compared to 7 days earlier. Empty when there were none.
+        expr: (submissions_count - submissions_prev_week) * 100.0 / nullif(submissions_prev_week, 0)
+        input_metrics:
+          - name: submissions_count
+          - name: submissions_count
+            alias: submissions_prev_week
+            offset_window: 7 days
 
   - name: mart_browser_distribution
     description: >
@@ -166,11 +246,14 @@ models:
         description: Calendar day. Unique.
         data_tests: [unique, not_null]
 
-metrics:
-  - name: submissions_count
-    label: Submissions
-    description: Total number of live submissions.
-    type: simple
-    agg: count
-    expr: submission_id
-    model: ref('fct_submissions')
+saved_queries:
+  - name: daily_mobile_mix
+    label: Daily mobile mix
+    description: Submissions and mobile share per day and browser. A starting point for the traffic mix chart.
+    query_params:
+      metrics:
+        - submissions_count
+        - mobile_share
+      group_by:
+        - "TimeDimension('metric_time', 'day')"
+        - "Dimension('submission__browser')"

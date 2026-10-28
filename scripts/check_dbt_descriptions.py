@@ -1,6 +1,8 @@
-"""Fail when a dbt model, seed, source or column lacks a usable description.
+"""Fail when a dbt model, seed, source, column or metric lacks a description.
 
 Reads `target/manifest.json` (run `dbt parse` first, see `task dbt:coverage`).
+Semantic Layer parts count too: metrics, saved queries, semantic models and
+their dimensions and entities, because agents pick metrics by description.
 Descriptions must also not contain a semicolon: dbt v2 persists them as SQL
 comments and a semicolon breaks the statement.
 
@@ -15,6 +17,12 @@ from typing import Any
 
 DEFAULT_MANIFEST = Path("transform/dbt/target/manifest.json")
 CHECKED_TYPES = {"model", "seed"}
+SEMANTIC_SECTIONS = {
+    "metrics": "metric",
+    "saved_queries": "saved query",
+    "semantic_models": "semantic model",
+}
+SEMANTIC_PARTS = ("dimensions", "entities")
 
 
 def _problems(label: str, node: dict[str, Any]) -> Iterator[str]:
@@ -42,7 +50,23 @@ def find_problems(manifest: dict[str, Any]) -> list[str]:
         (f"source {node['source_name']}.{node['name']}", node)
         for node in manifest.get("sources", {}).values()
     ]
-    return [msg for label, node in nodes + sources for msg in _problems(label, node)]
+    problems = [
+        msg for label, node in nodes + sources for msg in _problems(label, node)
+    ]
+    return problems + _semantic_problems(manifest)
+
+
+def _semantic_problems(manifest: dict[str, Any]) -> list[str]:
+    """Description problems of metrics, saved queries and semantic models."""
+    problems: list[str] = []
+    for section, kind in SEMANTIC_SECTIONS.items():
+        for node in manifest.get(section, {}).values():
+            label = f"{kind} {node['name']}"
+            problems += _problems(label, node)
+            for part in SEMANTIC_PARTS if section == "semantic_models" else ():
+                for item in node.get(part, []):
+                    problems += _problems(f"{label}.{item['name']}", item)
+    return problems
 
 
 def main(argv: list[str]) -> int:

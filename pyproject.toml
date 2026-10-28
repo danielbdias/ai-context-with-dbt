@@ -1,7 +1,7 @@
 [project]
 name = "ai-context-with-dbt"
 version = "0.1.0"
-description = "Local ELT demo: Postgres, dlt, ClickHouse, dbt v2, dbt MCP."
+description = "ELT demo: Postgres, dlt, Snowflake, dbt v2, dbt MCP and the Semantic Layer."
 requires-python = ">=3.13,<3.14"
 dependencies = []
 

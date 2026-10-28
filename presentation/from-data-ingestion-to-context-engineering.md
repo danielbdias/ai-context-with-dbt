@@ -415,7 +415,7 @@ The example repo: <https://github.com/danielbdias/ai-context-with-dbt>
 flowchart LR
   form["Form<br/>apps/web"] --> pg[("Postgres")]
   pg --> dlt["dlt<br/>apps/el"]
-  dlt --> raw[("ClickHouse raw")]
+  dlt --> raw[("Snowflake RAW")]
   raw --> dbt["dbt<br/>transform/dbt"]
   dbt --> marts[("marts")]
   marts --> charts["dbt Charts"]

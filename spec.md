@@ -1,3 +1,8 @@
+> **Superseded requirements.** These are the original requirements, written for a
+> local ClickHouse warehouse and without a working Semantic Layer. The project
+> was later migrated to Snowflake and the dbt platform. See
+> `docs/architecture.md` for the current design. This file is kept as written.
+
 # Task: Implementation PLAN for an end-to-end ELT demo (Postgres -> ClickHouse -> dbt -> dashboard + dbt MCP)
 
 You are producing an **implementation plan only**. Do not write code, scaffold files, or run installers. The output is one plan document (see "Deliverable").

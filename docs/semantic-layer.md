@@ -121,17 +121,22 @@ From the project's **Project details** page and your account:
 
 | Value | Used as | Where |
 |---|---|---|
-| Access URL host, for example `abc123.us1.dbt.com` | `DBT_HOST` | **Account settings** (Access URLs). A bare hostname works, and so does `https://host` |
-| The first label of that host, for example `abc123` | `DBT_HOST_PREFIX` | Only for hosts shaped `<prefix>.<cell>.dbt.com`. Leave it empty for `cloud.getdbt.com` |
+| The Access URL without its first label, for example `us1.dbt.com` | `DBT_HOST` | **Account settings** (Access URLs). A bare hostname works, and so does `https://host` |
+| The first label of the Access URL, for example `abc123` | `DBT_HOST_PREFIX` | Only for Access URLs shaped `<prefix>.<cell>.dbt.com`, such as `abc123.us1.dbt.com`. For `cloud.getdbt.com` set `DBT_HOST=cloud.getdbt.com` and leave this empty |
 | Service token | `DBT_TOKEN` | step 4 |
 | Production environment ID (a number, not the URL) | `DBT_PROD_ENV_ID` | **Project details**, or the number after `/environments/` in the environment's URL |
 | Account ID | `DBT_ACCOUNT_ID` | only if you use a personal access token instead |
 
-dbt's docs say the prefix is optional when `DBT_HOST` already contains it. With
-dbt-mcp 2.7.0 and a token, it is not: without `DBT_HOST_PREFIX` the Semantic
-Layer tools query `semantic-layer.abc123.us1.dbt.com`, which does not exist
-(the log shows `Name or service not known`). The real host is
-`abc123.semantic-layer.us1.dbt.com`.
+An Access URL of `abc123.us1.dbt.com` therefore becomes `DBT_HOST=us1.dbt.com`
+and `DBT_HOST_PREFIX=abc123`. dbt's docs say the prefix is optional when
+`DBT_HOST` already contains it. With dbt-mcp 2.7.0 and a token, it is not:
+without `DBT_HOST_PREFIX` the Semantic Layer tools query
+`semantic-layer.abc123.us1.dbt.com`, which does not exist (the log shows `Name or
+service not known`). The real host is `abc123.semantic-layer.us1.dbt.com`.
+
+Putting the full `abc123.us1.dbt.com` in `DBT_HOST` together with the prefix also
+works, because dbt-mcp strips the duplicate, but it logs a warning on every
+start. The split form calls the same endpoint without it.
 
 Never commit these. The next change wires them into dbt-mcp through `.env`.
 

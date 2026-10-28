@@ -86,16 +86,22 @@ ORDER BY start_time DESC LIMIT 20;
 Everything should be a `SELECT` (plus `ALTER_SESSION` and `SHOW`/`DESCRIBE`
 setup). `DBT_RUNNER` only sees its own queries, so `task sf` cannot answer this.
 
-Harmless stderr noise in `task mcp:smoke`: `Failed to open log file for append:
-Read-only file system` (the project mount is read-only, logs go to stderr) and
-`Timeout waiting for LSP server to connect` on shutdown.
+Harmless stderr noise in `task mcp:smoke`, which still exits 0: `Failed to open
+log file for append: Read-only file system`, then four LSP `ERROR` lines and an
+asyncio traceback (`Task exception was never retrieved`). dbt-mcp starts `dbt
+lsp` eagerly and the project mount is read-only on purpose, so it times out.
+`DISABLE_LSP=true` does not stop it. Also harmless: `Failed to fetch user id:`
+and, if `DBT_HOST` still carries the prefix, `already contains the account
+prefix` (see the Semantic Layer table). Judge the run by the exit code and the
+last lines, not by stderr.
 
 ### Semantic Layer
 
 | Symptom | Check |
 |---|---|
 | Metric tools say `DBT_HOST is a required environment variable` | `DBT_HOST`, `DBT_TOKEN` or `DBT_PROD_ENV_ID` is missing in `.env` |
-| `Name or service not known` or `name resolver error: produced zero addresses` | Set `DBT_HOST_PREFIX` to the first label of `DBT_HOST` |
+| `Name or service not known` or `name resolver error: produced zero addresses` | Set `DBT_HOST_PREFIX` to the first label of your Access URL, and `DBT_HOST` to the rest |
+| Warning: `DBT_HOST ... already contains the account prefix` | Harmless. Split the Access URL to silence it: `DBT_HOST=us1.dbt.com` and `DBT_HOST_PREFIX=abc123` for `abc123.us1.dbt.com` |
 | `403` | The token lacks Semantic Layer Only and Metadata Only, or the account restricts IP addresses |
 | `list_metrics` is empty or metrics are stale | The production job has not run since the change, or it ran on the wrong branch |
 | Numbers disagree with `show` | The job has not rebuilt since `task el`. Run it |

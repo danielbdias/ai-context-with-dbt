@@ -30,7 +30,8 @@ task mcp:claude    # prints the setup below with this machine's paths
 The Semantic Layer tools also need the dbt platform. Do
 [docs/semantic-layer.md](../docs/semantic-layer.md) first, then put
 `DBT_HOST`, `DBT_TOKEN` and `DBT_PROD_ENV_ID` in `.env`, plus `DBT_HOST_PREFIX`
-when the host looks like `<prefix>.<cell>.dbt.com`. Without them the
+when the Access URL looks like `<prefix>.<cell>.dbt.com` (then `DBT_HOST` is the
+rest, for example `us1.dbt.com`). Without them the
 server still starts and `show` works, but the metric tools return an error.
 
 `task mcp:claude` changes no Claude config. It only builds and prints.
@@ -158,15 +159,23 @@ mountpoint inside a read-only bind mount.
 - What the Semantic Layer would run: ask for `get_metrics_compiled_sql`.
 - Run dbt directly in the same container:
   `docker compose --profile core --profile mcp run --rm --entrypoint dbt dbt-mcp debug`.
-- A harmless stderr line, `Failed to open log file for append: Read-only file
-  system`, comes from dbt-mcp starting `dbt lsp` eagerly (it does so whenever
-  the dbt binary has an `lsp` command, even with LSP tools disabled). The
-  read-only project stops it, which is what we want: no LSP tools are exposed.
+- Harmless stderr noise comes from dbt-mcp starting `dbt lsp` eagerly (it does so
+  whenever the dbt binary has an `lsp` command, even though no LSP tool is
+  exposed). The read-only project stops it, which is what we want. It shows up as
+  `Failed to open log file for append: Read-only file system`, then after about
+  10 s four `ERROR` lines (`Failed to start LSP server`, `Error terminating LSP
+  process`, `Error starting LSP connection` and `Task exception was never
+  retrieved` with a traceback). A passing `task mcp:smoke` still exits 0 and ends
+  with the metric and browser answers. `DISABLE_LSP=true` does not silence it,
+  because the tool allowlist (`DBT_MCP_ENABLE_TOOLS`) takes precedence.
 - The `Could not resolve credentials ... DBT_HOST` warning means the platform
   variables are missing, so the Semantic Layer tools answer with an error. The
   entrypoint (`transform/mcp-entrypoint.sh`) unsets empty `DBT_*` variables,
   because dbt-mcp crashes on an empty `DBT_PROD_ENV_ID`.
-- A `Timeout waiting for LSP server to connect` line on shutdown is harmless.
+- `DBT_HOST ('...') already contains the account prefix` is a warning, not an
+  error. Set `DBT_HOST` to the host without the prefix (for example `us1.dbt.com`)
+  and keep `DBT_HOST_PREFIX`. `Failed to fetch user id:` is the optional
+  `DBT_USER_ID`, which nothing here uses.
 - `Name or service not known` or `name resolver error: produced zero addresses`
   from a metric tool: dbt-mcp built a host that does not exist. Set
   `DBT_HOST_PREFIX` to the first label of `DBT_HOST` (docs/semantic-layer.md).

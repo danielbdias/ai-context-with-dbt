@@ -140,6 +140,28 @@ because a service token only covers the toolsets its permission sets allow, and
 `execute_sql` does not work with service tokens at all. A service token is fine
 for this demo, which uses `list_metrics`, `get_dimensions` and `query_metrics`.
 
+## Validate the definitions without the platform
+
+Local `dbt parse` skips semantic validation (there is no `dbt_cloud.yml`), so a
+broken metric only shows up once the platform job runs. Check it earlier with the
+validator MetricFlow itself uses:
+
+```bash
+task dbt:parse
+uv run --no-project --with dbt-semantic-interfaces python - <<'PY'
+import json
+from dbt_semantic_interfaces.implementations.semantic_manifest import PydanticSemanticManifest
+from dbt_semantic_interfaces.validations.semantic_manifest_validator import SemanticManifestValidator
+raw = json.load(open("transform/dbt/target/semantic_manifest.json"))
+manifest = PydanticSemanticManifest.parse_obj(raw)
+results = SemanticManifestValidator[PydanticSemanticManifest]().validate_semantic_manifest(manifest)
+print("errors:", results.errors, "warnings:", results.warnings)
+PY
+```
+
+Both lists should be empty. This is not `mf validate-configs`, which needs a
+local MetricFlow install.
+
 ## What to expect
 
 - The metrics from `_marts.yml` (`submissions_count`, `mobile_share`,

@@ -1,3 +1,10 @@
+> **Superseded design.** This is the original plan, written for a local
+> ClickHouse warehouse. The project was later migrated to Snowflake and the dbt
+> platform so the Semantic Layer can run. Decisions below about ClickHouse, the
+> Superset word cloud, "no Semantic Layer" and offline operation no longer hold.
+> The current design is in `docs/architecture.md`, and `docs/semantic-layer.md`
+> covers the platform. The rest is kept as the record of the original intent.
+
 # Plan: ai-context-with-dbt — local ELT demo (Postgres → ClickHouse → dbt v2 → dbt Charts + dbt MCP)
 
 ## Context

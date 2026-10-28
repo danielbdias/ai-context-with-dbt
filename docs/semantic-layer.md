@@ -80,6 +80,13 @@ and `MARTS` schemas only for the targets `dev`, `ci`, `mcp`, `charts` and
 schema such as `staging_marts`, and the Semantic Layer would not find the tables
 the readers can see.
 
+A job builds the branch its environment points at, which is `main` by default.
+While the Snowflake migration is still in open pull requests, `main` has the
+ClickHouse SQL and the job fails with errors such as `unexpected '('` in
+`metricflow_time_spine.sql`. Either merge the migration into `main` first, or
+turn on the environment's custom branch setting (look for **Only run on a custom
+branch** in the environment settings) and give it the migration branch.
+
 Click **Run now** and wait for a successful run. The Semantic Layer cannot be
 configured until the environment has one.
 

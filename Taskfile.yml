@@ -28,6 +28,10 @@ vars:
     -f docker-compose.yml -f scripts/e2e/compose.e2e.yml
 
 tasks:
+  default:
+    cmd: task --list --sort alphanumeric
+    silent: true
+
   setup:
     desc: Check toolchain, sync the uv workspace and the dbt Charts project, create .env
     cmds:

@@ -405,17 +405,71 @@ The project can be **tested** so your data ships to production safely.
 
 ---
 
-# Video: the VS Code extension in action
+<!-- _class: diagram -->
 
-<!-- Video: dss_demo.mp4 -->
-<https://docs.google.com/file/d/1epTtQuboMH4sRF48lsQetuNLxI4JRcAo/preview>
+# Coding time
+
+The example repo: <https://github.com/danielbdias/ai-context-with-dbt>
+
+<div class="mermaid">
+flowchart LR
+  form["Form<br/>apps/web"] --> pg[("Postgres")]
+  pg --> dlt["dlt<br/>apps/el"]
+  dlt --> raw[("ClickHouse raw")]
+  raw --> dbt["dbt<br/>transform/dbt"]
+  dbt --> marts[("marts")]
+  marts --> charts["dbt Charts<br/>Superset"]
+  marts --> mcp["dbt MCP<br/>Claude"]
+</div>
+
+Everything runs through `task` (`task --list`).
+
+<!--
+Pre-run before the talk (Docker, about 6 GB RAM): task setup, up, seed, el,
+dbt:build, dashboard, mcp:build.
+-->
 
 ---
 
-# Video: dbt Platform in action
+# Coding time: sources and models
 
-<!-- Video: dss_demo_2.mp4 -->
-<https://docs.google.com/file/d/1V5hkdLcmcbHM4WjbWEFF71b-UYCB8qHL/preview>
+- **Source**: `transform/dbt/models/staging/_sources.yml` declares
+  `raw.submissions`, with freshness (warn after 24h) and descriptions.
+- **Model**: `stg_app__submissions.sql` deduplicates with `argMax` and maps
+  browsers and OSes through seeds, with `Other` as the fallback.
+
+<!--
+Live: task app:open, submit a message (password dssbr, demo only), then
+task el && task dbt:build. Optional: task dbt:docs for lineage on :8081.
+-->
+
+---
+
+# Coding time: business rules and tests
+
+- **Change a rule**: edit `seeds/browser_family_map.csv`, run
+  `task dbt:build`, and the charts change. No pipeline rework.
+- **Enforce a rule**: the `normalize_token` macro and the `no_stopwords`
+  generic test keep `café` equal to `cafe` and drop stopwords.
+- **Git**: it is a repo like any other, with Conventional Commits and PRs.
+
+<!-- Live: task dashboard, then open /overview/ and /words/. -->
+
+---
+
+# Coding time: dbt as the agent's context
+
+- Every model and column has a **description**, enforced by
+  `task dbt:coverage`. Marts state their grain and an example query.
+- Claude queries the marts through a read-only **dbt MCP** server.
+- Guardrails hold on their own: the `mcp_reader` user can only `SELECT` from
+  `marts`, so reading `staging` or `raw` fails.
+- PII control lives in the grants and the ingestion design, not in a dbt macro.
+
+<!--
+Live: run claude at the repo root and ask "what are the top browsers?". Then
+ask it to read staging or raw to show ACCESS_DENIED. Fallback: task mcp:smoke.
+-->
 
 ---
 
@@ -424,6 +478,7 @@ The project can be **tested** so your data ships to production safely.
 - Visual Studio Code extension: <https://marketplace.visualstudio.com/items?itemName=dbtLabsInc.dbt>
 - dbt v2: <https://github.com/dbt-labs/dbt>
 - Documentation: <https://docs.getdbt.com/>
+- Example repo: <https://github.com/danielbdias/ai-context-with-dbt>
 
 ---
 

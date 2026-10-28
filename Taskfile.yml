@@ -39,7 +39,7 @@ tasks:
       - uv sync --all-packages
       - uv sync --frozen --directory dashboard/charts
       - task: env
-      # The ClickHouse ADBC driver is baked into the image at build time, so
+      # The warehouse ADBC driver is baked into the image at build time, so
       # there is nothing to download on first use.
       - docker compose --profile core --profile dbt build dbt
 
@@ -80,33 +80,40 @@ tasks:
     cmds:
       - uv run python -m scripts.seed
 
+  snowflake:env:
+    internal: true
+    desc: Fail early when SNOWFLAKE_ACCOUNT is not set in .env
+    preconditions:
+      - sh: test -n "$SNOWFLAKE_ACCOUNT"
+        msg: Set SNOWFLAKE_ACCOUNT in .env (see .env.example), then run task snowflake:setup once
+
   el:
-    desc: Run the dlt EL one-shot (Postgres submissions -> ClickHouse raw)
-    deps: [env]
+    desc: Run the dlt EL one-shot (Postgres submissions -> Snowflake raw)
+    deps: [env, snowflake:env]
     cmds:
       - docker compose --profile core --profile el run --rm --build el
 
   dbt:build:
     desc: "dbt build (seeds, models, tests), e.g. task dbt:build -- --select mart_word_frequencies+"
-    deps: [env]
+    deps: [env, snowflake:env]
     cmds:
       - '{{.DBT}} build {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
 
   dbt:run:
     desc: dbt run (models only)
-    deps: [env]
+    deps: [env, snowflake:env]
     cmds:
       - '{{.DBT}} run {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
 
   dbt:test:
     desc: dbt test (data and unit tests)
-    deps: [env]
+    deps: [env, snowflake:env]
     cmds:
       - '{{.DBT}} test {{.TARGET_FLAGS}} {{.CLI_ARGS}}'
 
   dbt:freshness:
     desc: Source freshness (warn only)
-    deps: [env]
+    deps: [env, snowflake:env]
     cmds:
       - '{{.DBT}} source freshness {{.TARGET_FLAGS}}'
 
@@ -117,14 +124,14 @@ tasks:
       - docker compose --profile core --profile dbt run --rm --no-deps --build dbt parse {{.TARGET_FLAGS}}
 
   dbt:debug:
-    desc: Check the profile and the ClickHouse connection
-    deps: [env]
+    desc: Check the profile and the Snowflake connection
+    deps: [env, snowflake:env]
     cmds:
       - '{{.DBT}} debug {{.TARGET_FLAGS}}'
 
   dbt:docs:
     desc: Generate the docs site and serve it on http://127.0.0.1:${DBT_DOCS_PORT:-8081}
-    deps: [env]
+    deps: [env, snowflake:env]
     cmds:
       - '{{.DBT}} docs generate {{.TARGET_FLAGS}}'
       - docker compose --profile core --profile dbt run --rm --service-ports dbt docs serve --no-open
@@ -137,12 +144,12 @@ tasks:
       - uv run python -m scripts.check_dbt_descriptions
 
   dashboard:
-    desc: Parse the charts manifest, start dbt Charts and Superset, open the overview board
+    desc: Parse the charts manifest, start dbt Charts, open the overview board
     deps: [env]
     cmds:
       - task: dbt:parse
         vars: {TARGET: charts, TARGET_PATH: target/charts}
-      - docker compose --profile core --profile dashboard up -d --build --wait charts superset
+      - docker compose --profile core --profile dashboard up -d --build --wait charts
       - open "http://127.0.0.1:${CHARTS_PORT:-8090}/overview/"
 
   charts:validate:
@@ -235,7 +242,6 @@ tasks:
       - uv run ruff format --check .
       - uv lock --check
       - task: charts:lint
-      - task: superset:lock
 
   charts:lint:
     desc: Lock check and static board validation (no warehouse; uses the dev manifest from dbt:coverage)
@@ -243,11 +249,6 @@ tasks:
     cmds:
       - uv lock --check
       - uv run dct validate --dbt-project-dir ../../transform/dbt
-
-  superset:lock:
-    desc: Check the Superset driver lock inside the image (same uv and Python 3.10 as the build)
-    cmds:
-      - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e UV_CACHE_DIR=/tmp/uvcache -v "{{.ROOT_DIR}}/dashboard/superset:/work" -w /work --entrypoint uv apache/superset:6.1.0 lock --check
 
   fmt:
     desc: Auto-fix and format with ruff
@@ -291,7 +292,7 @@ tasks:
       - docker compose --profile '*' ps
 
   logs:
-    desc: "Follow logs, e.g. task logs SVC=clickhouse"
+    desc: "Follow logs, e.g. task logs SVC=postgres"
     cmds:
       - docker compose --profile '*' logs -f {{.SVC}}
 
@@ -311,11 +312,17 @@ tasks:
       - docker compose exec -T -e PGPASSWORD="$POSTGRES_ADMIN_PASSWORD" postgres psql -U postgres -d {{.DB}} {{.CLI_ARGS}}
     interactive: true
 
-  ch:
-    desc: "clickhouse-client as default user, e.g. task ch -- -q 'select 1'"
-    deps: [env]
+  sf:
+    desc: "SQL as dbt_runner, e.g. task sf -- -q 'select current_role()'"
+    deps: [env, snowflake:env]
+    env:
+      SNOWFLAKE_PASSWORD: "{{.SNOWFLAKE_DBT_RUNNER_PASSWORD}}"
     cmds:
-      - docker compose exec -i clickhouse clickhouse-client --password "$CLICKHOUSE_DEFAULT_PASSWORD" {{.CLI_ARGS}}
+      - >-
+        uvx --from snowflake-cli snow sql --temporary-connection
+        --account "$SNOWFLAKE_ACCOUNT" --user DBT_RUNNER --role AICTX_DBT_RUNNER
+        --warehouse AICTX_TRANSFORM_WH --database "${SNOWFLAKE_DATABASE:-AICTX}"
+        {{.CLI_ARGS}}
     interactive: true
 
   snowflake:setup:
@@ -340,10 +347,6 @@ tasks:
     vars:
       PROFILE_FLAGS: '{{range splitList "," .E2E_PROFILES}}--profile {{.}} {{end}}'
     cmds:
-      # Refresh the dir in place: re-creating it can race the bind mount.
-      - mkdir -p scripts/e2e/.work/users.d
-      - find scripts/e2e/.work/users.d -type f -delete
-      - cp -R infra/clickhouse/users.d/. scripts/e2e/.work/users.d/
       - defer: |
           if [ -n "$E2E_KEEP" ]; then echo "E2E_KEEP set: aictx-e2e left running"; else {{.E2E_COMPOSE}} --profile '*' down -v --remove-orphans; fi
       - '{{.E2E_COMPOSE}} --profile "*" down -v --remove-orphans'

@@ -2,8 +2,8 @@
 
 Boards are YAML files in `charts/`. `dct serve` renders each one at
 `/<file name>/`: `/overview/` and `/words/`. The warehouse is the dbt profile
-`aictx`, target `charts`, which connects as `charts_reader` (SELECT on
-`marts` only).
+`aictx`, target `charts`, which connects to Snowflake as `CHARTS_READER` (role
+`AICTX_CHARTS_READER`, `SELECT` on `MARTS` only).
 
 ## Layout
 
@@ -11,9 +11,9 @@ Boards are YAML files in `charts/`. `dct serve` renders each one at
 |---|---|
 | `dbt_charts.yml` | The `warehouse` source (`type: dbt_profile`, profile `aictx`, target `charts`) and server settings |
 | `charts/overview.yml` | KPI, two donuts, daily line, top browser×OS table |
-| `charts/words.yml` | Top 30 words bar and the link to the Superset word cloud |
-| `entrypoint.sh` | Copies the mounted boards to `/work/project` and fills in `SUPERSET_PORT` |
-| `Dockerfile`, `pyproject.toml`, `uv.lock` | Own uv project and lock (`dbt-charts[clickhouse]==0.9.1`), `uv sync --frozen --no-dev` |
+| `charts/words.yml` | Top 30 words bar |
+| `entrypoint.sh` | Copies the mounted boards to a writable `/work/project`, then runs the command |
+| `Dockerfile`, `pyproject.toml`, `uv.lock` | Own uv project and lock (`dbt-charts[snowflake]==0.9.1`), `uv sync --frozen --no-dev` |
 
 Boards refer to dbt models with `{{ ref('mart_…') }}`. The compose service
 mounts the dbt project files read-only at `/app/dbt`: `dbt_project.yml`,
@@ -29,26 +29,30 @@ does this). E2E points `CHARTS_MANIFEST_DIR` at its own directory.
   `/app/dbt/target` and `DBT_PROJECT_DIR=/app/dbt`.
 - **The v2 manifest works.** `ref()` resolves against the dbt v2 manifest
   (`dbt_schema_version` v12) without problems.
-- **The timeout cap is on the profile.** `dct` sends its 120 s default with
-  every query, and the reader profile caps `max_execution_time` at 30 s. The
-  `charts` target in `transform/dbt/profiles.yml` sets
-  `custom_settings.max_execution_time: 30`, and `dct` takes the stricter value.
-  `execution.max_query_duration_seconds` in `dbt_charts.yml` has no effect
-  (it is read from the packaged defaults only), and the key is rejected on a
+- **The timeout cap is on the Snowflake user.** `dct` sends its 120 s default
+  with every query. `CHARTS_READER` and its warehouse have a 30 s
+  `STATEMENT_TIMEOUT_IN_SECONDS` (`infra/snowflake/setup.sql`), and Snowflake
+  applies the stricter value. The profile needs no `custom_settings`.
+  `execution.max_query_duration_seconds` in `dbt_charts.yml` has no effect (it
+  is read from the packaged defaults only), and the key is rejected on a
   `dbt_profile` source.
-- **Board Jinja has no `env_var`.** The link to Superset needs `SUPERSET_PORT`,
-  so `entrypoint.sh` substitutes `__SUPERSET_PORT__` in the copied board.
+- **Column names are lower case.** Snowflake folds unquoted names to upper
+  case, but `dct` returns `browser` and `submissions_count`, so the boards
+  refer to columns exactly as in the SQL and need no quoting.
 - **`dct doctor` does not exist in 0.9.1.** Use `dct validate --warehouse` and
-  `dct query warehouse '<sql>'`.
-- **Column warnings are advisory.** `WARN-DBT-QUERY-COLUMNS-INDETERMINATE` shows
-  up for `ref()` queries because ClickHouse gives `dct` no column schema.
-  `--strict` would fail on them, so lint does not use it.
+  `dct query warehouse '<sql>'` (the source is named `warehouse`, not the
+  board). Use fully qualified names there: `AICTX.MARTS.mart_browser_distribution`.
+- **Column warnings are advisory.** `WARN-DBT-QUERY-COLUMNS-INDETERMINATE` and
+  `WARN-COLUMN-CHECK-UNAVAILABLE` show up because Snowflake's `EXPLAIN` returns
+  no result schema, so `dct` cannot check chart columns. `--strict` would fail
+  on them, so lint does not use it. The render is the real check.
+- **Each board query wakes the reader warehouse.** It auto-suspends after 60 s.
 
 ## Commands
 
 | Task | What |
 |---|---|
-| `task dashboard` | Parse the charts manifest, start charts and Superset, open `/overview/` |
+| `task dashboard` | Parse the charts manifest, start dbt Charts, open `/overview/` |
 | `task charts:validate` | `dct validate --warehouse` in the running container |
 | `task charts:render` | Render both boards to `renders/*.html` (gitignored) |
 | `task charts:lint` | Lock check and static `dct validate` (lint runs this) |

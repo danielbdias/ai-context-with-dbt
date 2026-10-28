@@ -3,9 +3,9 @@ name = "aictx-charts"
 version = "0.1.0"
 description = "dbt Charts boards for the ai-context-with-dbt demo (own lock, not a workspace member)."
 requires-python = ">=3.13,<3.14"
-# dbt-charts' [clickhouse] extra pulls dbt-core <2 and dbt-clickhouse. Its `dbt`
+# dbt-charts' [snowflake] extra pulls dbt-core <2 and dbt-snowflake. Its `dbt`
 # entrypoint would clash with dbt v2 in transform/, so it lives in this lock.
-dependencies = ["dbt-charts[clickhouse]==0.9.1"]
+dependencies = ["dbt-charts[snowflake]==0.9.1"]
 
 [tool.uv]
 package = false

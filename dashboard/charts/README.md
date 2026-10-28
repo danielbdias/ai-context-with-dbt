@@ -47,6 +47,10 @@ does this). E2E points `CHARTS_MANIFEST_DIR` at its own directory.
   no result schema, so `dct` cannot check chart columns. `--strict` would fail
   on them, so lint does not use it. The render is the real check.
 - **Each board query wakes the reader warehouse.** It auto-suspends after 60 s.
+- **The container needs 1 GB.** `dct serve` grows to about 400 MB after serving
+  the boards, and `task charts:validate` starts a second `dct` process in the
+  same container. With the old 512 MB limit that second process was OOM-killed
+  (exit 137, no output).
 
 ## Commands
 

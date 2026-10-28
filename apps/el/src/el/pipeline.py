@@ -1,13 +1,13 @@
-"""dlt pipeline: Postgres `app.submissions` -> ClickHouse `raw.submissions`.
+"""dlt pipeline: Postgres `app.submissions` -> Snowflake `RAW.SUBMISSIONS`.
 
 Only the `submissions` table is selected, incrementally on `updated_at` and
-merged on `id`. dlt keeps its state in ClickHouse (`raw._dlt_pipeline_state`),
+merged on `id`. dlt keeps its state in Snowflake (`RAW._DLT_PIPELINE_STATE`),
 so the container is stateless: a fresh pipelines directory restores the cursor
 from the destination.
 
-dlt's ClickHouse destination writes to ONE database (`raw`). With no dataset
-name the final table is `raw.submissions` and the merge staging tables are
-`raw.stg___<table>` (see docs/grants-matrix.md).
+The dataset is the `RAW` schema. dlt merges through a second schema,
+`RAW_STAGING`, and folds identifiers to upper case, so dbt can reference them
+unquoted (see docs/grants-matrix.md).
 """
 
 import logging
@@ -23,15 +23,14 @@ from dlt.extract.resource import DltResource
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.sql_database import sql_table
 
-from el.settings import Settings, clickhouse_credentials, postgres_url
+from el.settings import SNOWFLAKE_DATASET, Settings, postgres_url, snowflake_credentials
 
 LOGGER = logging.getLogger("el")
-PIPELINE_NAME = "pg_to_ch"
+PIPELINE_NAME = "pg_to_sf"
 SOURCE_SCHEMA = "app"
 SOURCE_TABLE = "submissions"
 CURSOR_COLUMN = "updated_at"
 PRIMARY_KEY = "id"
-STAGING_LAYOUT = "stg"
 
 
 def build_resource(settings: Settings) -> DltResource:
@@ -49,19 +48,16 @@ def build_resource(settings: Settings) -> DltResource:
 
 
 def build_destination(settings: Settings) -> Destination:
-    """ClickHouse destination (MergeTree) loading into the `raw` database."""
-    return dlt.destinations.clickhouse(
-        credentials=clickhouse_credentials(settings),
-        staging_dataset_name_layout=STAGING_LAYOUT,
-    )
+    """Snowflake destination loading as the least-privilege `el_loader`."""
+    return dlt.destinations.snowflake(credentials=snowflake_credentials(settings))
 
 
 def build_pipeline(settings: Settings, pipelines_dir: str) -> dlt.Pipeline:
-    """Pipeline with no dataset name, so tables are not prefixed."""
+    """Pipeline loading into the `RAW` schema."""
     return dlt.pipeline(
         PIPELINE_NAME,
         destination=build_destination(settings),
-        dataset_name=None,
+        dataset_name=SNOWFLAKE_DATASET,
         pipelines_dir=pipelines_dir,
     )
 

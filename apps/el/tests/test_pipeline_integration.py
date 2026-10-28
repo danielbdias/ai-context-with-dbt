@@ -3,11 +3,11 @@
 import os
 import tempfile
 
-import clickhouse_connect
 import psycopg
 import pytest
+import snowflake.connector
 from el import pipeline
-from el.settings import Settings
+from el.settings import Settings, snowflake_credentials
 
 pytestmark = pytest.mark.integration
 
@@ -18,17 +18,20 @@ def settings() -> Settings:
 
 
 def raw_ids(settings: Settings) -> list[int]:
-    client = clickhouse_connect.get_client(
-        host=settings.clickhouse_host,
-        port=settings.clickhouse_http_port,
-        username="default",
-        password=os.environ["CLICKHOUSE_DEFAULT_PASSWORD"],
+    credentials = snowflake_credentials(settings)
+    conn = snowflake.connector.connect(
+        account=credentials["host"],
+        user=credentials["username"],
+        password=credentials["password"],
+        role=credentials["role"],
+        warehouse=credentials["warehouse"],
+        database=credentials["database"],
     )
     try:
-        rows = client.query("SELECT id FROM raw.submissions ORDER BY id").result_rows
+        rows = conn.cursor().execute("SELECT id FROM raw.submissions ORDER BY id")
+        return [row[0] for row in rows]
     finally:
-        client.close()
-    return [row[0] for row in rows]
+        conn.close()
 
 
 def pg_exec(settings: Settings, sql: str) -> list[tuple]:
@@ -45,7 +48,7 @@ def pg_exec(settings: Settings, sql: str) -> list[tuple]:
 
 
 def run_fresh(settings: Settings) -> None:
-    """Each run gets an empty pipelines dir: state must come from ClickHouse."""
+    """Each run gets an empty pipelines dir: state must come from Snowflake."""
     with tempfile.TemporaryDirectory() as pipelines_dir:
         pipeline.run_once(settings, pipelines_dir)
 

@@ -1,6 +1,6 @@
 # Build context is the repository root (the uv workspace lock lives there):
 #   docker build -f apps/el/Dockerfile .
-# One-shot image: `python -m el.pipeline` copies app.submissions to ClickHouse.
+# One-shot image: `python -m el.pipeline` copies app.submissions to Snowflake.
 FROM ghcr.io/astral-sh/uv:0.13.1 AS uv
 
 FROM python:3.13.16-slim-trixie AS builder
@@ -21,7 +21,7 @@ COPY apps/el apps/el
 RUN uv sync --frozen --package el --no-dev
 
 FROM python:3.13.16-slim-trixie AS runtime
-# The pipelines dir is a temp dir per run: state is restored from ClickHouse.
+# The pipelines dir is a temp dir per run: state is restored from Snowflake.
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

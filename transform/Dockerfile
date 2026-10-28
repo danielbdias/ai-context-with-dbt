@@ -22,15 +22,15 @@ RUN uv sync --frozen --package transform --no-dev --no-install-workspace
 COPY transform/src transform/src
 RUN uv sync --frozen --package transform --no-dev
 
-# dbt v2 talks to ClickHouse through an ADBC driver that it downloads on first
+# dbt v2 talks to Snowflake through an ADBC driver that it downloads on first
 # use. Download it now, at build time, so containers run offline and start
 # fast. `install-drivers` fetches every warehouse driver (about 500 MB), so keep
-# only ClickHouse (the warehouse) and DuckDB (`dbt docs generate` and
+# only Snowflake (the warehouse) and DuckDB (`dbt docs generate` and
 # `docs serve` read project metadata through it).
 ENV XDG_CACHE_HOME=/opt/dbt-cache
 RUN /app/.venv/bin/dbt system install-drivers \
     && find "$XDG_CACHE_HOME" -name 'libadbc_driver_*' \
-        ! -name 'libadbc_driver_clickhouse*' ! -name 'libadbc_driver_duckdb*' \
+        ! -name 'libadbc_driver_snowflake*' ! -name 'libadbc_driver_duckdb*' \
         -delete \
     && find "$XDG_CACHE_HOME" -type f
 

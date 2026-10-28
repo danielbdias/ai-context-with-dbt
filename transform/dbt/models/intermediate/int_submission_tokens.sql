@@ -1,13 +1,14 @@
-{#- One row per word occurrence in a non-deleted message. -#}
+{#- One row per word occurrence in a non-deleted message. A word is a run of
+    Latin letters, accented ones included. Snowflake regex has no \p{L}. -#}
 with words as (
     select
-        submission_id,
-        -- ifNull: unit-test fixtures are typed Nullable, arrays can't be.
-        arrayJoin(
-            extractAll(lowerUTF8(ifNull(message, '')), '\\p{L}+')
-        ) as display_word
-    from {{ ref('stg_app__submissions') }}
-    where not is_deleted
+        stg.submission_id,
+        piece.value::string as display_word
+    from {{ ref('stg_app__submissions') }} as stg,
+        lateral flatten(
+            input => regexp_substr_all(lower(coalesce(stg.message, '')), '[a-zà-öø-ÿ]+')
+        ) as piece
+    where not stg.is_deleted
 ),
 
 tokens as (
@@ -20,5 +21,5 @@ tokens as (
 
 select submission_id, word, display_word
 from tokens
-where lengthUTF8(word) >= 3
+where length(word) >= 3
     and word not in (select word from ({{ folded_stopwords() }}))

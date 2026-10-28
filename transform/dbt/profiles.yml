@@ -3,37 +3,40 @@
 #   dev, ci  -> dbt_runner (builds staging and marts)
 #   mcp      -> mcp_reader (read-only, marts)
 #   charts   -> charts_reader (read-only, marts)
+# Users, roles and warehouses come from infra/snowflake/setup.sql. A dbt platform
+# project ignores this file and uses its own connection settings.
 aictx:
   target: dev
   outputs:
     dev: &runner
-      type: clickhouse
-      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
-      port: "{{ env_var('CLICKHOUSE_HTTP_PORT') | as_number }}"
-      user: dbt_runner
-      password: "{{ env_var('CLICKHOUSE_DBT_RUNNER_PASSWORD') }}"
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', 'unset') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'AICTX') }}"
+      user: DBT_RUNNER
+      password: "{{ env_var('SNOWFLAKE_DBT_RUNNER_PASSWORD', '') }}"
+      role: AICTX_DBT_RUNNER
+      warehouse: AICTX_TRANSFORM_WH
       schema: staging
       threads: 4
     ci: *runner
     mcp:
-      type: clickhouse
-      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
-      port: "{{ env_var('CLICKHOUSE_HTTP_PORT') | as_number }}"
-      user: mcp_reader
-      password: "{{ env_var('CLICKHOUSE_MCP_READER_PASSWORD', '') }}"
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', 'unset') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'AICTX') }}"
+      user: MCP_READER
+      password: "{{ env_var('SNOWFLAKE_MCP_READER_PASSWORD', '') }}"
+      role: AICTX_MCP_READER
+      warehouse: AICTX_READ_WH
       schema: marts
-      check_exchange: false
       threads: 2
     charts:
-      type: clickhouse
-      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
-      port: "{{ env_var('CLICKHOUSE_HTTP_PORT') | as_number }}"
-      user: charts_reader
-      password: "{{ env_var('CLICKHOUSE_CHARTS_READER_PASSWORD', '') }}"
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', 'unset') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'AICTX') }}"
+      user: CHARTS_READER
+      password: "{{ env_var('SNOWFLAKE_CHARTS_READER_PASSWORD', '') }}"
+      role: AICTX_CHARTS_READER
+      warehouse: AICTX_READ_WH
       schema: marts
-      check_exchange: false
+      # The 30 s query cap lives on the reader users and warehouse (setup.sql).
       threads: 2
-      # dbt Charts caps each query at 120 s unless the profile caps it lower,
-      # and the reader profile allows at most 30 s (infra/clickhouse).
-      custom_settings:
-        max_execution_time: 30

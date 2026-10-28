@@ -1,15 +1,15 @@
 {#- Latest version of every submission. raw.submissions keeps one row per id
-    after the dlt merge, but argMax makes this robust to duplicates. -#}
+    after the dlt merge, but max_by makes this robust to duplicates. -#}
 with latest as (
     select
         id as submission_id,
-        argMax(message, updated_at) as latest_message,
-        argMax(browser_family, updated_at) as raw_browser_family,
-        argMax(os_family, updated_at) as raw_os_family,
-        argMax(created_at, updated_at) as first_created_at,
+        max_by(message, updated_at) as latest_message,
+        max_by(browser_family, updated_at) as raw_browser_family,
+        max_by(os_family, updated_at) as raw_os_family,
+        max_by(created_at, updated_at) as first_created_at,
         max(updated_at) as last_updated_at,
-        -- argMax skips NULLs: the tuple keeps an un-delete (NULL) as latest.
-        argMax(tuple(deleted_at), updated_at).1 as latest_deleted_at
+        -- max_by keeps a NULL winner, so an un-delete stays the latest state.
+        max_by(deleted_at, updated_at) as latest_deleted_at
     from {{ source('app', 'submissions') }}
     group by id
 )
@@ -17,9 +17,9 @@ with latest as (
 select
     latest.submission_id as submission_id,
     latest.latest_message as message,
-    -- A left join yields '' (not NULL) when nothing matches.
-    if(empty(browsers.browser_family), 'Other', browsers.browser_family) as browser,
-    if(empty(systems.os_family), 'Other', systems.os_family) as os,
+    -- A left join yields NULL when nothing matches.
+    coalesce(browsers.browser_family, 'Other') as browser,
+    coalesce(systems.os_family, 'Other') as os,
     latest.first_created_at as created_at,
     latest.last_updated_at as updated_at,
     latest.latest_deleted_at as deleted_at,

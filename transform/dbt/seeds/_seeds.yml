@@ -8,8 +8,8 @@ seeds:
       Families that are not listed become Other in stg_app__submissions.
     config:
       column_types:
-        raw_family: String
-        browser_family: String
+        raw_family: varchar
+        browser_family: varchar
     columns:
       - name: raw_family
         description: Browser family as reported by ua-parser, for example Mobile Safari.
@@ -25,8 +25,8 @@ seeds:
       are not listed become Other in stg_app__submissions.
     config:
       column_types:
-        raw_family: String
-        os_family: String
+        raw_family: varchar
+        os_family: varchar
     columns:
       - name: raw_family
         description: OS family as reported by ua-parser, for example Mac OS X.
@@ -41,7 +41,7 @@ seeds:
       folded in SQL by normalize_token before use, so the spelling here is free.
     config:
       column_types:
-        word: String
+        word: varchar
     columns:
       - name: word
         description: A Portuguese stopword in natural spelling.
@@ -53,7 +53,7 @@ seeds:
       normalize_token before use.
     config:
       column_types:
-        word: String
+        word: varchar
     columns:
       - name: word
         description: An English stopword in natural spelling.

@@ -1,7 +1,5 @@
-{{ config(materialized='table', order_by='day') }}
-
 with daily as (
-    select created_date as day, count() as submissions_count
+    select created_date as day, count(*) as submissions_count
     from {{ ref('fct_submissions') }}
     group by created_date
 )

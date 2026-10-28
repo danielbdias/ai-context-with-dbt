@@ -12,7 +12,7 @@ models:
       "which browser and OS did they use". Contains the free-text message, which
       is the only personal-data-adjacent field and carries a no-personal-data
       notice on the form. Example:
-      {% raw %}dbt show --inline "select browser, os, count() as n from {{ ref('fct_submissions') }} group by browser, os order by n desc"{% endraw %}
+      {% raw %}dbt show --inline "select browser, os, count(*) as n from {{ ref('fct_submissions') }} group by browser, os order by n desc"{% endraw %}
     columns:
       - name: submission_id
         entity:
@@ -158,8 +158,11 @@ models:
       Calendar spine. Grain is one row per day from 2024-01-01 for 3650 days.
       Required by MetricFlow for the submissions_count metric. Not meant for
       direct analysis.
+    time_spine:
+      standard_granularity_column: date_day
     columns:
       - name: date_day
+        granularity: day
         description: Calendar day. Unique.
         data_tests: [unique, not_null]
 

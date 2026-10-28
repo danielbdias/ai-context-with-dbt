@@ -4,7 +4,7 @@ sources:
   - name: app
     description: >
       Tables that the dlt EL job copies as-is from the Postgres app database
-      into the ClickHouse raw database. Nothing here is cleaned.
+      into the Snowflake RAW schema. Nothing here is cleaned.
     schema: raw
     config:
       loaded_at_field: updated_at

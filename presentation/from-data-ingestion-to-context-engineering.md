@@ -321,16 +321,12 @@ The transformation now runs **inside the warehouse**.
 **dbt (data build tool)** is an open-source tool that brings software
 engineering best practices to data transformation.
 
-It currently comes in two editions:
-
-- **dbt Core**, under the Apache 2.0 license: <https://github.com/dbt-labs/dbt-core>
-- **dbt Fusion**, under the Elastic License 2.0: <https://github.com/dbt-labs/dbt-fusion>
+Recently it moved to **dbt v2**, under the Apache 2.0 license: <https://github.com/dbt-labs/dbt>
 
 ---
 
 # How dbt interacts with the data ecosystem
 
-<!-- Image: diagram of dbt within the data ecosystem -->
 ![](./images/dbt-in-data-space.png)
 
 ---
@@ -341,6 +337,7 @@ Transformation in dbt is structured as a project with source code in SQL, YAML
 and Python.
 
 <!-- Image: dbt project structure -->
+![](./images/dbt-project-structure.png)
 
 ---
 
@@ -351,7 +348,7 @@ and Python.
 
 The tables loaded by the Extract & Load step are declared as **sources**.
 
-<!-- Image: dbt project structure, highlighting sources -->
+![](./images/dbt-sources.png)
 
 ---
 
@@ -364,7 +361,7 @@ The tables loaded by the Extract & Load step are declared as **sources**.
 
 Sources are then exposed through **models**, written as *SQL selects*.
 
-<!-- Image: dbt project structure, highlighting models -->
+![](./images/dbt-models.png)
 
 ---
 
@@ -380,7 +377,7 @@ Sources are then exposed through **models**, written as *SQL selects*.
 With those models we can structure the **business rules** of the transformation
 and change them easily when needed.
 
-<!-- Image: dbt project structure, highlighting business rules -->
+![](./images/dbt-business-rules.png)
 
 ---
 
@@ -388,7 +385,7 @@ and change them easily when needed.
 
 Your dbt project code can live in a repository like GitHub.
 
-<!-- Image: dbt project versioned in a repository -->
+![](./images/dbt-git-project.png)
 
 ---
 
@@ -398,7 +395,7 @@ Your dbt project code can live in a repository like GitHub.
 
 The project can be **tested** so your data ships to production safely.
 
-<!-- Image: dbt project with tests and deploy -->
+![](./images/dbt-tests.png)
 
 ---
 
@@ -425,8 +422,7 @@ The project can be **tested** so your data ships to production safely.
 # Learn more
 
 - Visual Studio Code extension: <https://marketplace.visualstudio.com/items?itemName=dbtLabsInc.dbt>
-- dbt Core: <https://github.com/dbt-labs/dbt-core>
-- dbt Fusion: <https://github.com/dbt-labs/dbt-fusion>
+- dbt v2: <https://github.com/dbt-labs/dbt>
 - Documentation: <https://docs.getdbt.com/>
 
 ---
@@ -437,16 +433,5 @@ getdbt.com
 
 @danielbdias
 
-<!-- QR codes: qrcode_dbt.png, qrcode.png -->
-
----
-
-# Workshop
-
-**Data Science Summit 2025**
-
-<workshops.us1.dbt.com/workshop>
-
-Password: `DataScienceSummit2025`
-
-<!-- Workshop QR code -->
+![](./images/qr-code-dbt.png)
+![](./images/qr-code-personal.png)

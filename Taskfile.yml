@@ -318,6 +318,23 @@ tasks:
       - docker compose exec -i clickhouse clickhouse-client --password "$CLICKHOUSE_DEFAULT_PASSWORD" {{.CLI_ARGS}}
     interactive: true
 
+  snowflake:setup:
+    desc: "One-time Snowflake setup (roles, users, grants); needs SNOWFLAKE_ADMIN_* in the shell"
+    preconditions:
+      - sh: test -n "$SNOWFLAKE_ACCOUNT" -a -n "$SNOWFLAKE_ADMIN_USER" -a -n "$SNOWFLAKE_ADMIN_PASSWORD"
+        msg: Set SNOWFLAKE_ACCOUNT, SNOWFLAKE_ADMIN_USER and SNOWFLAKE_ADMIN_PASSWORD first
+    env:
+      SNOWFLAKE_PASSWORD: "{{.SNOWFLAKE_ADMIN_PASSWORD}}"
+    cmds:
+      - >-
+        uvx --from snowflake-cli snow sql --temporary-connection
+        --account "$SNOWFLAKE_ACCOUNT" --user "$SNOWFLAKE_ADMIN_USER"
+        --filename infra/snowflake/setup.sql
+        -D el_loader_password="$SNOWFLAKE_EL_LOADER_PASSWORD"
+        -D dbt_runner_password="$SNOWFLAKE_DBT_RUNNER_PASSWORD"
+        -D mcp_reader_password="$SNOWFLAKE_MCP_READER_PASSWORD"
+        -D charts_reader_password="$SNOWFLAKE_CHARTS_READER_PASSWORD"
+
   e2e:
     desc: "Isolated e2e run (project aictx-e2e); E2E_KEEP=1 skips teardown"
     vars:

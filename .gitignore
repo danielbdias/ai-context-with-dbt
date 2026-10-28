@@ -27,8 +27,6 @@ transform/dbt/.user.yml
 .idea/
 .vscode/
 
-# ClickHouse entrypoint-generated (contains the default password)
-infra/clickhouse/users.d/default-user.xml
 
 # dbt Charts: rendered HTML from `task charts:render`
 dashboard/charts/renders/

@@ -7,11 +7,11 @@ x-web-image: &web-image
     context: .
     dockerfile: apps/web/Dockerfile
 
-# Shared by `superset-init` and `superset`: the Superset image plus the driver.
-x-superset-image: &superset-image
-  image: aictx-superset:local
-  build:
-    context: dashboard/superset
+# Snowflake is a remote warehouse, so there is no database service to wait for.
+# Each service adds only its own user's password.
+x-snowflake-env: &snowflake-env
+  SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT:-}
+  SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE:-AICTX}
 
 services:
   postgres:
@@ -36,39 +36,6 @@ services:
       timeout: 3s
       retries: 20
     mem_limit: 512m
-    networks: [backend]
-
-  clickhouse:
-    image: clickhouse/clickhouse-server:26.3.54.6
-    profiles: [core]
-    environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_DEFAULT_PASSWORD}
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
-      # Consumed by infra/clickhouse/init/01-access.sh on first start only.
-      CLICKHOUSE_EL_LOADER_PASSWORD: ${CLICKHOUSE_EL_LOADER_PASSWORD}
-      CLICKHOUSE_DBT_RUNNER_PASSWORD: ${CLICKHOUSE_DBT_RUNNER_PASSWORD}
-      CLICKHOUSE_MCP_READER_PASSWORD: ${CLICKHOUSE_MCP_READER_PASSWORD}
-      CLICKHOUSE_CHARTS_READER_PASSWORD: ${CLICKHOUSE_CHARTS_READER_PASSWORD}
-      CLICKHOUSE_SUPERSET_READER_PASSWORD: ${CLICKHOUSE_SUPERSET_READER_PASSWORD}
-    ports:
-      - "127.0.0.1:${CLICKHOUSE_HTTP_PORT}:8123"
-      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT}:9000"
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    volumes:
-      - ch_data:/var/lib/clickhouse
-      - ./infra/clickhouse/config.d:/etc/clickhouse-server/config.d:ro
-      - ./infra/clickhouse/users.d:/etc/clickhouse-server/users.d  # rw: the image entrypoint writes default-user.xml here
-      - ./infra/clickhouse/init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping"]
-      interval: 3s
-      timeout: 3s
-      retries: 20
-    mem_limit: 2g
     networks: [backend]
 
   migrate:
@@ -125,16 +92,12 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_EL_READER_PASSWORD: ${POSTGRES_EL_READER_PASSWORD}
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_NATIVE_PORT: "9000"
-      CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_EL_LOADER_PASSWORD: ${CLICKHOUSE_EL_LOADER_PASSWORD}
+      <<: *snowflake-env
+      SNOWFLAKE_EL_LOADER_PASSWORD: ${SNOWFLAKE_EL_LOADER_PASSWORD}
       EL_MAX_ATTEMPTS: ${EL_MAX_ATTEMPTS:-3}
       EL_RETRY_DELAY_SECONDS: ${EL_RETRY_DELAY_SECONDS:-5}
     depends_on:
       postgres:
-        condition: service_healthy
-      clickhouse:
         condition: service_healthy
     restart: "no"
     mem_limit: 512m
@@ -149,11 +112,10 @@ services:
     profiles: [dbt]
     # The command is the dbt subcommand, e.g. `run --rm dbt build`.
     environment:
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_DBT_RUNNER_PASSWORD: ${CLICKHOUSE_DBT_RUNNER_PASSWORD}
-      CLICKHOUSE_MCP_READER_PASSWORD: ${CLICKHOUSE_MCP_READER_PASSWORD}
-      CLICKHOUSE_CHARTS_READER_PASSWORD: ${CLICKHOUSE_CHARTS_READER_PASSWORD}
+      <<: *snowflake-env
+      SNOWFLAKE_DBT_RUNNER_PASSWORD: ${SNOWFLAKE_DBT_RUNNER_PASSWORD}
+      SNOWFLAKE_MCP_READER_PASSWORD: ${SNOWFLAKE_MCP_READER_PASSWORD}
+      SNOWFLAKE_CHARTS_READER_PASSWORD: ${SNOWFLAKE_CHARTS_READER_PASSWORD}
       DBT_TARGET: ${DBT_TARGET:-dev}
       DBT_DOCS_HOST: 0.0.0.0
       DBT_DOCS_PORT: "8081"
@@ -167,9 +129,6 @@ services:
       - ./transform/dbt:/app/transform/dbt
     # Match the host owner on Linux (`DBT_UID=$(id -u) DBT_GID=$(id -g)`).
     user: "${DBT_UID:-10001}:${DBT_GID:-10001}"
-    depends_on:
-      clickhouse:
-        condition: service_healthy
     restart: "no"
     mem_limit: 1g
     networks: [backend]
@@ -186,9 +145,8 @@ services:
     # No ports. Only the read-only `mcp` target credentials are passed in.
     stdin_open: true
     environment:
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_MCP_READER_PASSWORD: ${CLICKHOUSE_MCP_READER_PASSWORD}
+      <<: *snowflake-env
+      SNOWFLAKE_MCP_READER_PASSWORD: ${SNOWFLAKE_MCP_READER_PASSWORD}
       DBT_MCP_LOG_LEVEL: ${DBT_MCP_LOG_LEVEL:-INFO}
     volumes:
       # The project is read-only. dbt writes only to target_mcp/. The same
@@ -198,9 +156,6 @@ services:
       - ./transform/dbt:/app/transform/dbt:ro
       - dbt_mcp_target:/app/transform/dbt/target_mcp
       - dbt_mcp_target:/app/transform/dbt/target
-    depends_on:
-      clickhouse:
-        condition: service_healthy
     restart: "no"
     mem_limit: 512m
     networks: [backend]
@@ -214,11 +169,8 @@ services:
       context: dashboard/charts
     profiles: [dashboard]
     environment:
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_CHARTS_READER_PASSWORD: ${CLICKHOUSE_CHARTS_READER_PASSWORD}
-      # Only used to build the word-cloud link in the words board.
-      SUPERSET_PORT: ${SUPERSET_PORT:-8088}
+      <<: *snowflake-env
+      SNOWFLAKE_CHARTS_READER_PASSWORD: ${SNOWFLAKE_CHARTS_READER_PASSWORD}
     ports:
       - "127.0.0.1:${CHARTS_PORT:-8090}:8090"
     volumes:
@@ -227,9 +179,6 @@ services:
       - ./transform/dbt/dbt_project.yml:/app/dbt/dbt_project.yml:ro
       - ./transform/dbt/profiles.yml:/app/dbt/profiles.yml:ro
       - ${CHARTS_MANIFEST_DIR:-./transform/dbt/target/charts}:/app/dbt/target:ro
-    depends_on:
-      clickhouse:
-        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -242,71 +191,11 @@ services:
     mem_limit: 512m
     networks: [backend]
 
-  # Superset, used for the word cloud only. The driver goes in at build time
-  # from dashboard/superset/uv.lock (the image has no ClickHouse or Postgres
-  # driver). See dashboard/superset/README.md.
-  superset-init:
-    <<: *superset-image
-    profiles: [dashboard]
-    command: ["/app/aictx/init.sh"]
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_SUPERSET_META_PASSWORD: ${POSTGRES_SUPERSET_META_PASSWORD}
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_SUPERSET_READER_PASSWORD: ${CLICKHOUSE_SUPERSET_READER_PASSWORD}
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
-    volumes:
-      - superset_home:/app/superset_home
-    depends_on:
-      postgres:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-    restart: "no"
-    mem_limit: 1g
-    networks: [backend]
-
-  superset:
-    <<: *superset-image
-    profiles: [dashboard]
-    # No ClickHouse credentials here: the reader connection is stored in the
-    # Superset metadata DB by superset-init, and only the server reads it back.
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_SUPERSET_META_PASSWORD: ${POSTGRES_SUPERSET_META_PASSWORD}
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-    ports:
-      - "127.0.0.1:${SUPERSET_PORT:-8088}:8088"
-    volumes:
-      - superset_home:/app/superset_home
-    depends_on:
-      superset-init:
-        condition: service_completed_successfully
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request as u; u.urlopen('http://127.0.0.1:8088/health', timeout=3)"
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 20s
-    mem_limit: 1.5g
-    networks: [backend]
-
 networks:
   backend:
 
 volumes:
   pg_data:
-  ch_data:
-  # Superset's local home (caches, generated files). Its metadata lives in Postgres.
-  superset_home:
   # In-memory and owned by the image's `app` user. Emptied when no dbt-mcp
   # container uses it.
   dbt_mcp_target:

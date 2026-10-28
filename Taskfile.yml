@@ -199,9 +199,16 @@ tasks:
       - mkdir -p transform/dbt/target transform/dbt/target_mcp
       - docker compose --profile core --profile mcp build dbt-mcp
 
+  dbt-platform:env:
+    internal: true
+    desc: Fail early when the dbt platform variables are missing from .env
+    preconditions:
+      - sh: test -n "$DBT_HOST" -a -n "$DBT_TOKEN" -a -n "$DBT_PROD_ENV_ID"
+        msg: Set DBT_HOST, DBT_TOKEN and DBT_PROD_ENV_ID in .env (see docs/semantic-layer.md)
+
   mcp:smoke:
-    desc: "Talk MCP to dbt-mcp over stdio: list tools, ask for the top browsers"
-    deps: [mcp:build]
+    desc: "Talk MCP to dbt-mcp over stdio: list tools, top browsers, and a Semantic Layer metric"
+    deps: [mcp:build, snowflake:env, dbt-platform:env]
     cmds:
       - uv run python scripts/mcp_smoke.py
 

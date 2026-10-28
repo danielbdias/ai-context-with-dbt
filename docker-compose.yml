@@ -142,11 +142,15 @@ services:
     profiles: [mcp]
     # A stdio MCP server, started per session by the client:
     #   docker compose --profile mcp run --rm -i --no-TTY dbt-mcp
-    # No ports. Only the read-only `mcp` target credentials are passed in.
+    # No ports. Only the read-only `mcp` target credentials and the dbt platform
+    # service token (Semantic Layer Only, Metadata Only) are passed in.
     stdin_open: true
     environment:
       <<: *snowflake-env
       SNOWFLAKE_MCP_READER_PASSWORD: ${SNOWFLAKE_MCP_READER_PASSWORD}
+      DBT_HOST: ${DBT_HOST:-}
+      DBT_TOKEN: ${DBT_TOKEN:-}
+      DBT_PROD_ENV_ID: ${DBT_PROD_ENV_ID:-}
       DBT_MCP_LOG_LEVEL: ${DBT_MCP_LOG_LEVEL:-INFO}
     volumes:
       # The project is read-only. dbt writes only to target_mcp/. The same

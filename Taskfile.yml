@@ -163,7 +163,7 @@ tasks:
   presentation:pdf:
     desc: "Render the markdown presentation to PDF, e.g. task presentation:pdf SLIDES=other.md"
     vars:
-      SLIDES: '{{.SLIDES | default "de-data-ingestion-a-context-engineering.md"}}'
+      SLIDES: '{{.SLIDES | default "from-data-ingestion-to-context-engineering.md"}}'
     cmds:
       # --allow-local-files lets the slides pull in images from presentation/.
       - '{{.MARP}} --pdf --allow-local-files {{.SLIDES}}'
@@ -171,7 +171,7 @@ tasks:
   presentation:html:
     desc: "Render the presentation to a single self-contained HTML (GIFs animate)"
     vars:
-      SLIDES: '{{.SLIDES | default "de-data-ingestion-a-context-engineering.md"}}'
+      SLIDES: '{{.SLIDES | default "from-data-ingestion-to-context-engineering.md"}}'
       DECK: '{{trimSuffix ".md" .SLIDES}}.html'
     cmds:
       - '{{.MARP}} --allow-local-files -o {{.DECK}} {{.SLIDES}}'

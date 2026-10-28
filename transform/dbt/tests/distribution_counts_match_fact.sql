@@ -1,6 +1,6 @@
 {#- Fails (returns a row) when browser or OS counts do not add up to the fact. -#}
 with fact as (
-    select count() as total from {{ ref('fct_submissions') }}
+    select count(*) as total from {{ ref('fct_submissions') }}
 ),
 browsers as (
     select sum(submissions_count) as total from {{ ref('mart_browser_distribution') }}

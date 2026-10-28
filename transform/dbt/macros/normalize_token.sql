@@ -1,6 +1,11 @@
 {#- Fold a text expression so that "Café", "café" and "cafe" compare equal:
-    lowercase, decompose accents (NFD) and strip combining marks (\p{Mn}).
-    The same macro folds message tokens and stopword seeds. -#}
+    lowercase, then map accented Latin letters to their base letter. Snowflake
+    has no Unicode normalisation, so this is a translate() table. The same macro
+    folds message tokens and stopword seeds, which keeps both sides symmetric. -#}
 {% macro normalize_token(expression) -%}
-    replaceRegexpAll(normalizeUTF8NFD(lowerUTF8({{ expression }})), '\\p{Mn}', '')
+    translate(
+        lower({{ expression }}),
+        'áàâãäåçéèêëíìîïñóòôõöúùûüýÿ',
+        'aaaaaaceeeeiiiinooooouuuuyy'
+    )
 {%- endmacro %}

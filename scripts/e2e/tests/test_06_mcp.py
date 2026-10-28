@@ -1,24 +1,26 @@
-"""Stage 6: dbt-mcp over stdio exposes six read-only tools and reads as mcp_reader.
+"""Stage 6: dbt-mcp over stdio exposes read-only tools and reads as mcp_reader.
 
 Runs after stage 5, so the marts exist. The MCP session is the same command
-Claude runs (`scripts/mcp_smoke.py`), pointed at the e2e compose project.
+Claude runs (`scripts/mcp_smoke.py`), pointed at the e2e compose project. Only
+the local tools are exercised: the Semantic Layer is served by the dbt platform
+from the dev database, not from this run's database. `task mcp:smoke` covers it.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 import anyio
 import pytest
 
 from scripts.e2e.helpers import (
-    E2E_DIR,
-    ENV,
+    E2E_DATABASE,
     ENV_FILE,
     PROJECT,
-    ch_query,
     compose,
+    process_env,
     run_dbt,
+    sf_query,
 )
 from scripts.mcp_smoke import (
     ALLOWED_TOOLS,
@@ -31,68 +33,70 @@ from scripts.mcp_smoke import (
     run_smoke,
 )
 
-E2E_PROJECT_ARGS = (
-    "-p",
-    PROJECT,
-    "--env-file",
-    str(ENV_FILE),
-    "-f",
-    str(E2E_DIR / "compose.e2e.yml"),
+pytestmark = pytest.mark.usefixtures("e2e_database")
+
+E2E_PROJECT_ARGS = ("-p", PROJECT, "--env-file", str(ENV_FILE))
+# Query types that change data or objects. ALTER_SESSION is session setup.
+WRITE_QUERY_PREFIXES = (
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "MERGE",
+    "CREATE",
+    "DROP",
+    "TRUNCATE",
+    "COPY",
+    "GRANT",
+    "REVOKE",
 )
-READ_KINDS = {"Select", "Exists"}
-
-
-def server_now() -> datetime:
-    """ClickHouse server time, so the query_log window uses one clock."""
-    return ch_query("SELECT now64(6)")[0][0]
+Session = tuple[SmokeResult, datetime, datetime]
 
 
 @pytest.fixture(scope="module")
-def session() -> tuple[SmokeResult, datetime, datetime]:
-    """One MCP session (initialize, list tools, show) and its server-time window."""
+def session() -> Session:
+    """One MCP session (initialize, list tools, show) and its time window."""
     ensure_mountpoints()
     compose("build", "dbt-mcp", profiles=("core", "mcp"))
-    start = server_now()
-    result = anyio.run(run_smoke, compose_command(E2E_PROJECT_ARGS), ENV)
-    return result, start, server_now()
+    start = datetime.now(UTC) - timedelta(seconds=10)
+    result = anyio.run(
+        lambda: run_smoke(
+            compose_command(E2E_PROJECT_ARGS), process_env(), semantic_layer=False
+        )
+    )
+    return result, start, datetime.now(UTC) + timedelta(seconds=10)
 
 
-def test_only_allowlisted_tools(
-    session: tuple[SmokeResult, datetime, datetime],
-) -> None:
+def test_only_allowlisted_tools(session: Session) -> None:
     tools = set(session[0].tools)
     assert tools == ALLOWED_TOOLS
     assert not tools & WRITE_TOOLS
 
 
-def test_show_answers_top_browsers(
-    session: tuple[SmokeResult, datetime, datetime],
-) -> None:
-    expected = ch_query(
-        "SELECT browser, submissions_count FROM marts.mart_browser_distribution"
-        " ORDER BY submissions_count DESC"
+def test_show_answers_top_browsers(session: Session) -> None:
+    expected = sf_query(
+        "SELECT browser, submissions_count FROM MARTS.MART_BROWSER_DISTRIBUTION"
     )
     rows = session[0].rows
-    assert [(r["browser"], r["submissions_count"]) for r in rows] == expected
+    assert {r["browser"]: r["submissions_count"] for r in rows} == dict(expected)
 
 
-def test_mcp_session_read_only_as_mcp_reader(
-    session: tuple[SmokeResult, datetime, datetime],
-) -> None:
+def test_mcp_session_read_only_as_mcp_reader(session: Session) -> None:
     _, start, end = session
-    ch_query("SYSTEM FLUSH LOGS")
-    rows = ch_query(
-        "SELECT user, query_kind, written_rows, query FROM system.query_log"
-        " WHERE type = 'QueryFinish' AND user != 'default'"
-        " AND event_time_microseconds BETWEEN {start:DateTime64(6)}"
-        " AND {end:DateTime64(6)}",
-        parameters={"start": start, "end": end},
+    rows = sf_query(
+        "SELECT user_name, query_type, query_text"
+        " FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_USER("
+        "USER_NAME => 'MCP_READER',"
+        " END_TIME_RANGE_START => %s::TIMESTAMP_LTZ,"
+        " END_TIME_RANGE_END => %s::TIMESTAMP_LTZ, RESULT_LIMIT => 1000))"
+        " WHERE database_name = %s",
+        "admin",
+        params=(start.isoformat(), end.isoformat(), E2E_DATABASE),
     )
     assert rows, "the MCP session ran no queries"
-    assert {user for user, _, _, _ in rows} == {"mcp_reader"}
-    assert {kind for _, kind, _, _ in rows} <= READ_KINDS
-    assert sum(written for _, _, written, _ in rows) == 0
-    assert any("mart_browser_distribution" in query for *_, query in rows)
+    assert {user for user, _, _ in rows} == {"MCP_READER"}
+    kinds = {kind for _, kind, _ in rows}
+    assert not [k for k in kinds if k.startswith(WRITE_QUERY_PREFIXES)], kinds
+    assert any("MART_BROWSER_DISTRIBUTION" in text.upper() for *_, text in rows)
 
 
 def test_dbt_show_inline_target_mcp_returns_rows() -> None:
@@ -125,4 +129,4 @@ def test_dbt_show_select_non_mart_fails_as_mcp_reader() -> None:
         "target/e2e_mcp",
     )
     assert result.returncode != 0
-    assert "ACCESS_DENIED" in result.stdout + result.stderr
+    assert "not authorized" in (result.stdout + result.stderr).lower()

@@ -43,6 +43,11 @@ def test_check_accepts_a_consistent_result() -> None:
     check(result())
 
 
+def test_check_skips_the_semantic_layer_when_it_was_not_asked_for() -> None:
+    local_only = SmokeResult(tools=sorted(ALLOWED_TOOLS), rows=[{"browser": "Chrome"}])
+    check(local_only)
+
+
 def test_check_rejects_a_missing_tool() -> None:
     with pytest.raises(AssertionError, match="unexpected tools"):
         check(result(tools=["show"]))

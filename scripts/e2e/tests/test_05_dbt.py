@@ -12,8 +12,10 @@ from collections import Counter
 
 import pytest
 
-from scripts.e2e.helpers import ENV, ch_command, ch_query, pg_query, run_dbt
+from scripts.e2e.helpers import pg_query, run_dbt, sf_query
 from scripts.e2e.payloads import EXPECTED_WORD_COUNTS, STOPWORDS_PRESENT
+
+pytestmark = pytest.mark.usefixtures("e2e_database")
 
 BROWSERS = {"Chrome": "Chrome", "Firefox": "Firefox", "Mobile Safari": "Safari"}
 SYSTEMS = {"Mac OS X": "macOS", "Linux": "Linux", "iOS": "iOS"}
@@ -21,7 +23,11 @@ LETTERS = re.compile(r"[^\W\d_]+")
 
 
 def fold(word: str) -> str:
-    """Lowercase and strip accents, like the `normalize_token` macro."""
+    """Lowercase and strip accents, like the `normalize_token` macro.
+
+    The macro uses a translate() table for Latin letters. For the fixture words
+    that gives the same result as stripping Unicode combining marks.
+    """
     decomposed = unicodedata.normalize("NFD", word.lower())
     return "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
 
@@ -58,36 +64,41 @@ def test_dbt_docs_generate_succeeds(dbt_build: None) -> None:
 
 
 def test_staging_flags_the_deleted_row(dbt_build: None) -> None:
-    total, deleted = ch_query(
-        "SELECT count(), countIf(is_deleted) FROM staging.stg_app__submissions"
+    total, deleted = sf_query(
+        "SELECT count(*), count_if(is_deleted) FROM STAGING.STG_APP__SUBMISSIONS"
     )[0]
     assert (total, deleted) == (7, 1)
 
 
 def test_staging_ignores_an_older_deleted_duplicate(dbt_build: None) -> None:
-    """Regression: argMax skips NULLs, so a stale deleted version won the dedup.
+    """Regression: a stale deleted version of a live row must not win the dedup.
 
-    Staging is a view, so a raw row inserted here shows up without a rebuild.
+    On ClickHouse, argMax skipped NULLs and the stale row won. Snowflake's max_by
+    keeps a NULL winner, so this pins that property. Staging is a view, so a raw
+    row inserted here shows up without a rebuild.
     """
-    live_id = ch_query(
-        "SELECT max(submission_id) FROM staging.stg_app__submissions"
+    live_id = sf_query(
+        "SELECT max(submission_id) FROM STAGING.STG_APP__SUBMISSIONS"
         " WHERE NOT is_deleted"
     )[0][0]
-    stale = "updated_at - INTERVAL 1 DAY"
-    ch_command(
-        "INSERT INTO raw.submissions SELECT * REPLACE ("
-        f"{stale} AS updated_at, {stale} AS deleted_at, 'e2e-stale' AS _dlt_id)"
-        f" FROM raw.submissions WHERE id = {live_id}"
+    stale = "DATEADD(day, -1, updated_at)"
+    sf_query(
+        "INSERT INTO RAW.SUBMISSIONS (id, message, browser_family, os_family,"
+        " created_at, updated_at, deleted_at, _dlt_load_id, _dlt_id)"
+        f" SELECT id, message, browser_family, os_family, created_at, {stale},"
+        f" {stale}, _dlt_load_id, 'e2e-stale'"
+        f" FROM RAW.SUBMISSIONS WHERE id = {live_id}",
+        "el_loader",
     )
     try:
-        rows = ch_query(
-            "SELECT is_deleted FROM staging.stg_app__submissions"
+        rows = sf_query(
+            "SELECT is_deleted FROM STAGING.STG_APP__SUBMISSIONS"
             f" WHERE submission_id = {live_id}"
         )
-        assert rows == [(0,)]
+        assert rows == [(False,)]
     finally:
-        ch_command("DELETE FROM raw.submissions WHERE _dlt_id = 'e2e-stale'")
-    assert ch_query("SELECT count() FROM raw.submissions")[0][0] == 7
+        sf_query("DELETE FROM RAW.SUBMISSIONS WHERE _dlt_id = 'e2e-stale'", "el_loader")
+    assert sf_query("SELECT count(*) FROM RAW.SUBMISSIONS")[0][0] == 7
 
 
 def test_distributions_match_live_postgres_rows(dbt_build: None) -> None:
@@ -95,20 +106,20 @@ def test_distributions_match_live_postgres_rows(dbt_build: None) -> None:
     browsers = Counter(BROWSERS[browser] for _, browser, _ in rows)
     systems = Counter(SYSTEMS[system] for _, _, system in rows)
     browser_sql = (
-        "SELECT browser, submissions_count FROM marts.mart_browser_distribution"
+        "SELECT browser, submissions_count FROM MARTS.MART_BROWSER_DISTRIBUTION"
     )
-    os_sql = "SELECT os, submissions_count FROM marts.mart_os_distribution"
-    assert dict(ch_query(browser_sql)) == dict(browsers)
-    assert dict(ch_query(os_sql)) == dict(systems)
-    assert ch_query("SELECT count() FROM marts.fct_submissions")[0][0] == len(rows)
-    assert ch_query(
-        "SELECT max(cumulative_submissions) FROM marts.mart_submissions_daily"
+    os_sql = "SELECT os, submissions_count FROM MARTS.MART_OS_DISTRIBUTION"
+    assert dict(sf_query(browser_sql)) == dict(browsers)
+    assert dict(sf_query(os_sql)) == dict(systems)
+    assert sf_query("SELECT count(*) FROM MARTS.FCT_SUBMISSIONS")[0][0] == len(rows)
+    assert sf_query(
+        "SELECT max(cumulative_submissions) FROM MARTS.MART_SUBMISSIONS_DAILY"
     )[0][0] == len(rows)
 
 
 def test_word_frequencies_match_fixture(dbt_build: None) -> None:
     live = live_word_counts()
-    marts = dict(ch_query("SELECT word, frequency FROM marts.mart_word_frequencies"))
+    marts = dict(sf_query("SELECT word, frequency FROM MARTS.MART_WORD_FREQUENCIES"))
     for word in EXPECTED_WORD_COUNTS:
         assert marts[word] == live[word], word
     # The deleted first message held one "cafe" and one "dados".
@@ -118,8 +129,8 @@ def test_word_frequencies_match_fixture(dbt_build: None) -> None:
 
 
 def test_cafe_and_café_are_merged(dbt_build: None) -> None:
-    rows = ch_query(
-        "SELECT word, display_word FROM marts.mart_word_frequencies"
+    rows = sf_query(
+        "SELECT word, display_word FROM MARTS.MART_WORD_FREQUENCIES"
         " WHERE word IN ('cafe', 'café')"
     )
     assert [word for word, _ in rows] == ["cafe"]
@@ -127,7 +138,7 @@ def test_cafe_and_café_are_merged(dbt_build: None) -> None:
 
 
 def test_no_stopwords_and_no_short_tokens(dbt_build: None) -> None:
-    words = {w for (w,) in ch_query("SELECT word FROM marts.mart_word_frequencies")}
+    words = {w for (w,) in sf_query("SELECT word FROM MARTS.MART_WORD_FREQUENCIES")}
     assert words
     assert not words & set(STOPWORDS_PRESENT)
     assert all(len(word) >= 3 for word in words)
@@ -136,7 +147,6 @@ def test_no_stopwords_and_no_short_tokens(dbt_build: None) -> None:
 @pytest.mark.parametrize("reader", ["mcp_reader", "charts_reader"])
 def test_readers_select_the_built_marts(dbt_build: None, reader: str) -> None:
     """Assert 10: readers can SELECT the real marts, not just a probe table."""
-    creds = {"user": reader, "password": ENV[f"CLICKHOUSE_{reader.upper()}_PASSWORD"]}
-    for table in ("fct_submissions", "mart_browser_distribution"):
-        rows = ch_query(f"SELECT count() FROM marts.{table}", **creds)
+    for table in ("FCT_SUBMISSIONS", "MART_BROWSER_DISTRIBUTION"):
+        rows = sf_query(f"SELECT count(*) FROM MARTS.{table}", reader)
         assert rows[0][0] > 0, table

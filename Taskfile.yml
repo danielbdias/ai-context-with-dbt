@@ -25,7 +25,7 @@ vars:
   E2E_COMPOSE: >-
     env $(grep -v '^#' scripts/e2e/e2e.env | xargs)
     docker compose -p aictx-e2e --env-file scripts/e2e/e2e.env
-    -f docker-compose.yml -f scripts/e2e/compose.e2e.yml
+    -f docker-compose.yml
 
 tasks:
   default:
@@ -340,23 +340,25 @@ tasks:
 
   snowflake:setup:
     desc: "One-time Snowflake setup (roles, users, grants); needs SNOWFLAKE_ADMIN_* in the shell"
+    deps: [env]
     preconditions:
       - sh: test -n "$SNOWFLAKE_ACCOUNT" -a -n "$SNOWFLAKE_ADMIN_USER" -a -n "$SNOWFLAKE_ADMIN_PASSWORD"
-        msg: Set SNOWFLAKE_ACCOUNT, SNOWFLAKE_ADMIN_USER and SNOWFLAKE_ADMIN_PASSWORD first
-    env:
-      SNOWFLAKE_PASSWORD: "{{.SNOWFLAKE_ADMIN_PASSWORD}}"
+        msg: Set SNOWFLAKE_ACCOUNT in .env and export SNOWFLAKE_ADMIN_USER and SNOWFLAKE_ADMIN_PASSWORD first
     cmds:
-      - >-
-        uvx --from snowflake-cli snow sql --temporary-connection
-        --account "$SNOWFLAKE_ACCOUNT" --user "$SNOWFLAKE_ADMIN_USER"
-        --filename infra/snowflake/setup.sql
-        -D el_loader_password="$SNOWFLAKE_EL_LOADER_PASSWORD"
-        -D dbt_runner_password="$SNOWFLAKE_DBT_RUNNER_PASSWORD"
-        -D mcp_reader_password="$SNOWFLAKE_MCP_READER_PASSWORD"
-        -D charts_reader_password="$SNOWFLAKE_CHARTS_READER_PASSWORD"
+      - uv run python -m scripts.snowflake_setup
+
+  e2e:clean:
+    desc: Drop every AICTX_E2E_* database left behind by an interrupted e2e run
+    deps: [env]
+    cmds:
+      - uv run python -m scripts.e2e.clean
 
   e2e:
-    desc: "Isolated e2e run (project aictx-e2e); E2E_KEEP=1 skips teardown"
+    desc: "Isolated e2e run (project aictx-e2e, per-run Snowflake database); E2E_KEEP=1 skips teardown"
+    deps: [env, snowflake:env]
+    preconditions:
+      - sh: test -n "$SNOWFLAKE_ADMIN_USER" -a -n "$SNOWFLAKE_ADMIN_PASSWORD"
+        msg: Export SNOWFLAKE_ADMIN_USER and SNOWFLAKE_ADMIN_PASSWORD (the suite creates and drops a database)
     vars:
       PROFILE_FLAGS: '{{range splitList "," .E2E_PROFILES}}--profile {{.}} {{end}}'
     cmds:

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from scripts.e2e.helpers import ENV, ch_query, pg_query, run_el
+import pytest
+
+from scripts.e2e.helpers import ENV, pg_query, run_el, sf_query
 from scripts.e2e.payloads import SAMPLES
 from scripts.seed import make_client, submit
 
-AUX_TABLES = ("request_metadata", "auth_attempts")
+AUX_TABLES = ("REQUEST_METADATA", "AUTH_ATTEMPTS")
+
+pytestmark = pytest.mark.usefixtures("e2e_database")
 
 
 def pg_submission_count() -> int:
@@ -15,7 +19,7 @@ def pg_submission_count() -> int:
 
 def raw_counts() -> tuple[int, int]:
     """(rows, distinct ids) in the raw table."""
-    return ch_query("SELECT count(), uniqExact(id) FROM raw.submissions")[0]
+    return sf_query("SELECT count(*), count(DISTINCT id) FROM RAW.SUBMISSIONS")[0]
 
 
 def el_ok() -> None:
@@ -43,8 +47,8 @@ def test_soft_delete_and_new_row_propagate() -> None:
     el_ok()
     assert pg_submission_count() == 7
     assert raw_counts() == (7, 7)
-    latest = ch_query(
-        "SELECT id, argMax(deleted_at, updated_at) FROM raw.submissions"
+    latest = sf_query(
+        "SELECT id, max_by(deleted_at, updated_at) FROM RAW.SUBMISSIONS"
         " GROUP BY id ORDER BY id"
     )
     assert len(latest) == 7
@@ -54,14 +58,20 @@ def test_soft_delete_and_new_row_propagate() -> None:
     assert raw_counts() == (7, 7)
 
 
-def test_auxiliary_tables_never_reach_clickhouse() -> None:
-    names = {name for (name,) in ch_query("SELECT name FROM system.tables")}
+def test_auxiliary_tables_never_reach_snowflake() -> None:
+    names = {
+        name
+        for (name,) in sf_query(
+            "SELECT table_name FROM INFORMATION_SCHEMA.TABLES"
+            " WHERE table_schema = 'RAW'"
+        )
+    }
     assert not names & set(AUX_TABLES)
-    assert "submissions" in names
+    assert "SUBMISSIONS" in names
 
 
-def test_el_fails_when_clickhouse_is_unreachable() -> None:
+def test_el_fails_when_snowflake_is_unreachable() -> None:
     result = run_el(
-        {"CLICKHOUSE_HOST": "clickhouse-down.invalid", "EL_MAX_ATTEMPTS": "1"}
+        {"SNOWFLAKE_ACCOUNT": "unreachable-e2e.invalid", "EL_MAX_ATTEMPTS": "1"}
     )
     assert result.returncode != 0

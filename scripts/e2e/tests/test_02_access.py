@@ -2,26 +2,29 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
-from contextlib import suppress
 
-import clickhouse_connect.driver.exceptions as chx
 import psycopg
 import pytest
 
 from scripts.e2e.helpers import (
+    DENIED,
     ENV,
-    ch_command,
-    ch_query,
     migrate,
     pg_query,
     pg_query_as,
+    sf_connect,
+    sf_query,
 )
 
 TABLES = {"submissions", "request_metadata", "auth_attempts"}
 WRITER = ("web_writer", ENV["POSTGRES_WEB_WRITER_PASSWORD"])
 READER = ("el_reader", ENV["POSTGRES_EL_READER_PASSWORD"])
-ERRORS = (chx.DatabaseError, chx.OperationalError)
+SCHEMAS = {"RAW", "RAW_STAGING", "STAGING", "MARTS"}
+SERVICE_USERS = {"EL_LOADER", "DBT_RUNNER", "MCP_READER", "CHARTS_READER"}
+ACCOUNT_USAGE = "SELECT * FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY LIMIT 1"
+READERS = ["mcp_reader", "charts_reader"]
 
 
 def app_tables() -> set[str]:
@@ -32,13 +35,10 @@ def app_tables() -> set[str]:
     return {name for (name,) in rows}
 
 
-def ch_user(name: str) -> dict[str, str]:
-    return {"user": name, "password": ENV[f"CLICKHOUSE_{name.upper()}_PASSWORD"]}
-
-
-def ch_denied(sql: str, user: str) -> None:
-    with pytest.raises(ERRORS):
-        ch_query(sql, **ch_user(user))
+def denied(sql: str, user: str) -> None:
+    """The statement must fail for `user` (not authorized or no privilege)."""
+    with pytest.raises(DENIED):
+        sf_query(sql, user)
 
 
 # --- Postgres -------------------------------------------------------------
@@ -72,9 +72,9 @@ def test_postgres_objects_exist() -> None:
     )
     assert owner == [("app_owner",)]
     db_owner = pg_query(
-        "SELECT datdba::regrole::text FROM pg_database WHERE datname = 'superset'"
+        "SELECT datdba::regrole::text FROM pg_database WHERE datname = 'app'"
     )
-    assert db_owner == [("superset_meta",)]
+    assert db_owner == [("postgres",)]
 
 
 def test_updated_at_trigger_and_check() -> None:
@@ -127,7 +127,7 @@ def test_web_writer_privileges() -> None:
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             pg_query_as(*WRITER, sql)
     with pytest.raises(psycopg.OperationalError):
-        pg_query_as(*WRITER, "SELECT 1", db="superset")
+        pg_query_as(*WRITER, "SELECT 1", db="postgres")
     pg_query("DELETE FROM app.submissions WHERE message = 'writer probe'")
 
 
@@ -143,197 +143,164 @@ def test_el_reader_privileges() -> None:
             pg_query_as(*READER, sql)
 
 
-# --- ClickHouse -----------------------------------------------------------
+# --- Snowflake ------------------------------------------------------------
+# Each test runs in the per-run database. Snowflake has no `readonly` flag, row
+# cap or memory cap, so readers are read-only through grants alone, and bounded
+# by a statement timeout and a resource monitor (infra/snowflake/setup.sql).
 
 
 @pytest.fixture
-def mart_probe() -> Iterator[str]:
-    """A marts table created by dbt_runner, dropped afterwards."""
-    name = "marts.e2e_access_probe"
-    dbt = ch_user("dbt_runner")
-    ch_command(f"DROP TABLE IF EXISTS {name}", **dbt)
-    ch_command(f"CREATE TABLE {name} (n UInt8) ENGINE = MergeTree ORDER BY n", **dbt)
-    ch_command(f"INSERT INTO {name} VALUES (1), (2), (3)", **dbt)
+def mart_probe(e2e_database: str) -> Iterator[str]:
+    """A MARTS table created by dbt_runner, dropped afterwards."""
+    name = "MARTS.E2E_ACCESS_PROBE"
+    sf_query(f"CREATE OR REPLACE TABLE {name} (n NUMBER)", "dbt_runner")
+    sf_query(f"INSERT INTO {name} VALUES (1), (2), (3)", "dbt_runner")
     yield name
-    ch_command(f"DROP TABLE IF EXISTS {name}", **dbt)
+    sf_query(f"DROP TABLE IF EXISTS {name}", "dbt_runner")
 
 
 @pytest.fixture
-def other_db_probes() -> Iterator[list[str]]:
-    """Existing tables in raw and staging, so denials are not 'unknown'."""
-    names = [f"{db}.e2e_probe_other" for db in ("raw", "staging")]
-    for name in names:
-        ch_command(f"CREATE TABLE {name} (n UInt8) ENGINE = Memory")
-    yield names
-    for name in names:
-        ch_command(f"DROP TABLE IF EXISTS {name}")
+def other_schema_probes(e2e_database: str) -> Iterator[list[str]]:
+    """Existing tables in RAW, RAW_STAGING and STAGING, so denials are real."""
+    owners = {
+        "RAW.E2E_PROBE_OTHER": "el_loader",
+        "RAW_STAGING.E2E_PROBE_OTHER": "el_loader",
+        "STAGING.E2E_PROBE_OTHER": "dbt_runner",
+    }
+    for name, owner in owners.items():
+        sf_query(f"CREATE OR REPLACE TABLE {name} (n NUMBER)", owner)
+    yield list(owners)
+    for name, owner in owners.items():
+        sf_query(f"DROP TABLE IF EXISTS {name}", owner)
 
 
-def test_clickhouse_layout() -> None:
-    databases = {n for (n,) in ch_query("SHOW DATABASES")}
-    assert {"raw", "staging", "marts"} <= databases
-    assert "raw_staging" not in databases
-    users = {n for (n,) in ch_query("SELECT name FROM system.users")}
-    assert {
-        "el_loader",
-        "dbt_runner",
-        "mcp_reader",
-        "charts_reader",
-        "superset_reader",
-    } <= users
-    profile = ch_query(
-        "SELECT setting_name, value FROM system.settings_profile_elements "
-        "WHERE profile_name = 'reader' AND setting_name = 'readonly'"
-    )
-    assert profile == [("readonly", "2")]
+def test_snowflake_layout(e2e_database: str) -> None:
+    schemas = {
+        name
+        for (name,) in sf_query(
+            "SELECT schema_name FROM INFORMATION_SCHEMA.SCHEMATA", "admin"
+        )
+    }
+    assert schemas >= SCHEMAS
+    users = {row[0] for row in sf_query("SHOW USERS", "admin")}
+    assert users >= SERVICE_USERS
+    assert "SUPERSET_READER" not in users
 
 
-@pytest.mark.parametrize("reader", ["mcp_reader", "charts_reader"])
+@pytest.mark.parametrize("reader", READERS)
 def test_reader_allowed_and_denied(
-    reader: str, mart_probe: str, other_db_probes: list[str]
+    reader: str, mart_probe: str, other_schema_probes: list[str]
 ) -> None:
-    creds = ch_user(reader)
-    for table in other_db_probes:
-        ch_denied(f"SELECT * FROM {table}", reader)
-    assert ch_query(f"SELECT count() FROM {mart_probe}", **creds) == [(3,)]
+    for table in other_schema_probes:
+        denied(f"SELECT * FROM {table}", reader)
+    assert sf_query(f"SELECT count(*) FROM {mart_probe}", reader) == [(3,)]
     for sql in (
         f"INSERT INTO {mart_probe} VALUES (9)",
-        "CREATE TABLE marts.nope (n UInt8) ENGINE = Memory",
+        "CREATE TABLE MARTS.E2E_NOPE (n NUMBER)",
         f"DROP TABLE {mart_probe}",
-        f"ALTER TABLE {mart_probe} DELETE WHERE 1",
-        "SELECT * FROM system.query_log",
-        "SELECT * FROM system.users",
-        "SELECT * FROM information_schema.tables",
-        f"SELECT * FROM {mart_probe} SETTINGS max_result_rows = 0",
-        f"SELECT * FROM {mart_probe} SETTINGS max_result_rows = 100000",
-        f"SELECT * FROM {mart_probe} SETTINGS max_execution_time = 0",
-        f"SELECT * FROM {mart_probe} SETTINGS max_execution_time = 600",
-        f"SELECT * FROM {mart_probe} SETTINGS max_memory_usage = 0",
-        f"SELECT * FROM {mart_probe} SETTINGS result_overflow_mode = 'break'",
-        f"SELECT * FROM {mart_probe} SETTINGS readonly = 0",
+        f"ALTER TABLE {mart_probe} ADD COLUMN x NUMBER",
+        f"DELETE FROM {mart_probe}",
+        f"TRUNCATE TABLE {mart_probe}",
+        "CREATE SCHEMA E2E_NOPE",
+        ACCOUNT_USAGE,
     ):
-        ch_denied(sql, reader)
+        denied(sql, reader)
 
 
-def test_reader_limits_are_enforced() -> None:
-    rows = ch_query(
-        "SELECT name, value FROM system.settings WHERE name IN "
-        "('readonly', 'max_result_rows', 'max_execution_time')",
-        **ch_user("mcp_reader"),
-    )
-    assert dict(rows) == {
-        "readonly": "2",
-        "max_result_rows": "10000",
-        "max_execution_time": "30",
-    }
-
-
-def test_reader_row_cap() -> None:
-    sql = "SELECT number FROM numbers(20000)"
-    with pytest.raises(ERRORS):
-        ch_query(sql, **ch_user("mcp_reader"))
-
-
-def test_superset_reader_is_table_scoped(
-    mart_probe: str, other_db_probes: list[str]
+@pytest.mark.parametrize("reader", READERS)
+def test_reader_sees_only_marts_in_the_catalog(
+    reader: str, mart_probe: str, other_schema_probes: list[str]
 ) -> None:
-    creds = ch_user("superset_reader")
-    ch_denied(f"SELECT * FROM {mart_probe}", "superset_reader")
-    dbt = ch_user("dbt_runner")
-    word_table = "marts.mart_word_frequencies"
-    exists = ch_query(
-        "SELECT count() FROM system.tables WHERE database='marts' "
-        "AND name='mart_word_frequencies'"
-    )[0][0]
-    if not exists:
-        ch_command(
-            f"CREATE TABLE {word_table} (word String, frequency UInt64) "
-            "ENGINE = MergeTree ORDER BY word",
-            **dbt,
-        )
-    try:
-        assert ch_query(f"SELECT count() FROM {word_table}", **creds) is not None
-        for table in other_db_probes:
-            ch_denied(f"SELECT * FROM {table}", "superset_reader")
-        for sql in (
-            "SELECT * FROM system.query_log",
-            f"INSERT INTO {word_table} (word, frequency) VALUES ('x', 1)",
-            f"SELECT * FROM {word_table} SETTINGS max_result_rows = 0",
-            f"SELECT * FROM {word_table} SETTINGS max_execution_time = 600",
-        ):
-            ch_denied(sql, "superset_reader")
-    finally:
-        if not exists:
-            ch_command(f"DROP TABLE IF EXISTS {word_table}", **dbt)
-
-
-def test_el_loader_grants() -> None:
-    creds = ch_user("el_loader")
-    ch_command("DROP TABLE IF EXISTS raw.e2e_probe", **creds)
-    ch_command(
-        "CREATE TABLE raw.e2e_probe (n UInt8) ENGINE = MergeTree ORDER BY n", **creds
+    rows = sf_query(
+        "SELECT DISTINCT table_schema FROM INFORMATION_SCHEMA.TABLES"
+        " WHERE table_schema IN ('RAW', 'RAW_STAGING', 'STAGING', 'MARTS')",
+        reader,
     )
+    assert rows == [("MARTS",)]
+
+
+@pytest.mark.parametrize("reader", READERS)
+def test_reader_survives_a_dbt_rebuild(reader: str, mart_probe: str) -> None:
+    """dbt rebuilds tables with CREATE OR REPLACE, which drops grants on the old
+    object. FUTURE grants must give the new one back to the readers."""
+    sf_query(f"CREATE OR REPLACE TABLE {mart_probe} (n NUMBER)", "dbt_runner")
+    assert sf_query(f"SELECT count(*) FROM {mart_probe}", reader) == [(0,)]
+
+
+def test_reader_timeout_is_configured_on_user_and_warehouse(e2e_database: str) -> None:
+    for scope in ("USER MCP_READER", "USER CHARTS_READER", "WAREHOUSE AICTX_READ_WH"):
+        rows = sf_query(
+            f"SHOW PARAMETERS LIKE 'STATEMENT_TIMEOUT_IN_SECONDS' IN {scope}", "admin"
+        )
+        assert [row[1] for row in rows] == ["30"], scope
+
+
+def test_reader_cannot_raise_its_own_timeout(e2e_database: str) -> None:
+    """A session may ask for 600 s, but the user and warehouse cap of 30 s wins."""
+    connection = sf_connect("mcp_reader")
     try:
-        ch_command("INSERT INTO raw.e2e_probe VALUES (1)", **creds)
-        ch_command("ALTER TABLE raw.e2e_probe ADD COLUMN s String", **creds)
-        ch_command(
-            "ALTER TABLE raw.e2e_probe DELETE WHERE n = 1 SETTINGS mutations_sync = 1",
-            **creds,
-        )
-        assert ch_query("SELECT count() FROM raw.e2e_probe", **creds) == [(0,)]
-        tables = ch_query(
-            "SELECT count() FROM system.tables WHERE database='raw'", **creds
-        )
-        assert tables[0][0] >= 1
-        ch_query("SELECT count() FROM system.columns", **creds)
-        ch_query("SELECT count() FROM system.databases", **creds)
-        ch_query("SELECT count() FROM INFORMATION_SCHEMA.COLUMNS", **creds)
+        cursor = connection.cursor()
+        cursor.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 600")
+        started = time.monotonic()
+        with pytest.raises(DENIED, match="timeout of 30"):
+            cursor.execute(
+                "SELECT count(*) FROM"
+                " (SELECT seq4() FROM TABLE(GENERATOR(TIMELIMIT => 45)))"
+            )
+        assert time.monotonic() - started < 40
     finally:
-        ch_command("DROP TABLE IF EXISTS raw.e2e_probe", **creds)
+        connection.close()
+
+
+def test_el_loader_grants(mart_probe: str, other_schema_probes: list[str]) -> None:
+    loader = "el_loader"
+    raw, staging = "RAW.E2E_PROBE", "RAW_STAGING.E2E_PROBE"
+    for name in (raw, staging):
+        sf_query(f"CREATE OR REPLACE TABLE {name} (n NUMBER)", loader)
+    try:
+        sf_query(f"INSERT INTO {raw} VALUES (1)", loader)
+        sf_query(f"ALTER TABLE {raw} ADD COLUMN s VARCHAR", loader)
+        sf_query(f"DELETE FROM {raw} WHERE n = 1", loader)
+        assert sf_query(f"SELECT count(*) FROM {raw}", loader) == [(0,)]
+    finally:
+        for name in (raw, staging):
+            sf_query(f"DROP TABLE IF EXISTS {name}", loader)
     for sql in (
-        "CREATE TABLE marts.nope (n UInt8) ENGINE = Memory",
-        "CREATE TABLE staging.nope (n UInt8) ENGINE = Memory",
-        "CREATE DATABASE nope",
-        "SELECT * FROM system.query_log",
+        "CREATE TABLE MARTS.E2E_NOPE (n NUMBER)",
+        "CREATE TABLE STAGING.E2E_NOPE (n NUMBER)",
+        "CREATE SCHEMA E2E_NOPE",
+        ACCOUNT_USAGE,
     ):
-        with pytest.raises(ERRORS):
-            ch_command(sql, **creds)
-    for db in ("staging", "marts"):
-        ch_command(f"CREATE TABLE {db}.e2e_el_probe (n UInt8) ENGINE = Memory")
-        try:
-            with pytest.raises(ERRORS):
-                ch_query(f"SELECT * FROM {db}.e2e_el_probe", **creds)
-        finally:
-            ch_command(f"DROP TABLE {db}.e2e_el_probe")
+        denied(sql, loader)
+    # It cannot read what dbt builds.
+    denied(f"SELECT * FROM {mart_probe}", loader)
+    denied("SELECT * FROM STAGING.E2E_PROBE_OTHER", loader)
 
 
-def test_dbt_runner_grants() -> None:
-    creds = ch_user("dbt_runner")
-    ch_command("CREATE TABLE raw.e2e_src (n UInt8) ENGINE = MergeTree ORDER BY n")
+def test_dbt_runner_grants(e2e_database: str, other_schema_probes: list[str]) -> None:
+    runner, src = "dbt_runner", "RAW.E2E_SRC"
+    sf_query(f"CREATE OR REPLACE TABLE {src} (n NUMBER)", "el_loader")
     try:
-        ch_command("INSERT INTO raw.e2e_src VALUES (7)")
-        for db in ("staging", "marts"):
-            ch_command(f"CREATE VIEW {db}.e2e_v AS SELECT n FROM raw.e2e_src", **creds)
-            assert ch_query(f"SELECT n FROM {db}.e2e_v", **creds) == [(7,)]
-            ch_command(f"DROP VIEW {db}.e2e_v", **creds)
-        ch_command("CREATE TABLE marts.e2e_a (n UInt8) ENGINE = Memory", **creds)
-        ch_command("CREATE TABLE marts.e2e_b (n UInt8) ENGINE = Memory", **creds)
-        ch_command("EXCHANGE TABLES marts.e2e_a AND marts.e2e_b", **creds)
-        ch_command("DROP TABLE marts.e2e_a", **creds)
-        ch_command("DROP TABLE marts.e2e_b", **creds)
-        # Introspection used by the dbt adapter.
-        for system_table in ("tables", "columns", "databases", "settings", "functions"):
-            ch_query(f"SELECT count() FROM system.{system_table}", **creds)
+        sf_query(f"INSERT INTO {src} VALUES (7)", "el_loader")
+        for schema in ("STAGING", "MARTS"):
+            view = f"{schema}.E2E_V"
+            sf_query(f"CREATE OR REPLACE VIEW {view} AS SELECT n FROM {src}", runner)
+            assert sf_query(f"SELECT n FROM {view}", runner) == [(7,)]
+            sf_query(f"DROP VIEW {view}", runner)
+        sf_query("CREATE OR REPLACE TABLE MARTS.E2E_A (n NUMBER)", runner)
+        sf_query("CREATE OR REPLACE TABLE MARTS.E2E_B (n NUMBER)", runner)
+        sf_query("ALTER TABLE MARTS.E2E_A SWAP WITH MARTS.E2E_B", runner)
+        sf_query("DROP TABLE MARTS.E2E_A", runner)
+        sf_query("DROP TABLE MARTS.E2E_B", runner)
         for sql in (
-            "INSERT INTO raw.e2e_src VALUES (8)",
-            "CREATE TABLE raw.nope (n UInt8) ENGINE = Memory",
-            "DROP TABLE raw.e2e_src",
-            "ALTER TABLE raw.e2e_src DELETE WHERE 1",
-            "CREATE DATABASE nope",
-            "SELECT * FROM system.query_log",
+            f"INSERT INTO {src} VALUES (8)",
+            "CREATE TABLE RAW.E2E_NOPE (n NUMBER)",
+            f"DROP TABLE {src}",
+            f"ALTER TABLE {src} ADD COLUMN y NUMBER",
+            "CREATE SCHEMA E2E_NOPE",
+            "SELECT * FROM RAW_STAGING.E2E_PROBE_OTHER",
+            ACCOUNT_USAGE,
         ):
-            with pytest.raises(ERRORS):
-                ch_command(sql, **creds)
+            denied(sql, runner)
     finally:
-        with suppress(*ERRORS):
-            ch_command("DROP TABLE IF EXISTS raw.e2e_src")
+        sf_query(f"DROP TABLE IF EXISTS {src}", "el_loader")

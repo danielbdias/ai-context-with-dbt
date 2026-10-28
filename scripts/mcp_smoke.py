@@ -66,9 +66,11 @@ class SmokeResult:
 
     tools: list[str]
     rows: list[dict[str, Any]]
-    metrics_listing: str
-    warehouse_total: int
-    metric_answer: str
+    # The Semantic Layer half is None when it was not asked for (the e2e suite
+    # points at a throwaway database that the dbt platform does not serve).
+    metrics_listing: str | None = None
+    warehouse_total: int | None = None
+    metric_answer: str | None = None
 
 
 def compose_command(project_args: Sequence[str] = ()) -> list[str]:
@@ -124,9 +126,16 @@ def tool_text(result: CallToolResult) -> str:
 
 
 async def run_smoke(
-    command: Sequence[str], env: Mapping[str, str] | None = None
+    command: Sequence[str],
+    env: Mapping[str, str] | None = None,
+    *,
+    semantic_layer: bool = True,
 ) -> SmokeResult:
-    """Launch the server, list its tools and ask for the top browsers."""
+    """Launch the server, list its tools and ask for the top browsers.
+
+    With `semantic_layer`, also ask the dbt platform for a metric. That needs
+    DBT_HOST, DBT_TOKEN and DBT_PROD_ENV_ID.
+    """
     params = StdioServerParameters(
         command=command[0],
         args=list(command[1:]),
@@ -142,12 +151,15 @@ async def run_smoke(
         browsers = await session.call_tool(
             "show", {"sql_query": TOP_BROWSERS_SQL, "limit": 10}
         )
+        rows = parse_rows(tool_text(browsers))
+        if not semantic_layer:
+            return SmokeResult(tools=tools, rows=rows)
         total = await session.call_tool("show", {"sql_query": TOTAL_SQL, "limit": 1})
         listing = await session.call_tool("list_metrics", {})
         answer = await session.call_tool("query_metrics", {"metrics": [METRIC]})
         return SmokeResult(
             tools=tools,
-            rows=parse_rows(tool_text(browsers)),
+            rows=rows,
             metrics_listing=tool_text(listing),
             warehouse_total=int(parse_rows(tool_text(total))[0]["total"]),
             metric_answer=tool_text(answer),
@@ -162,10 +174,12 @@ def check(result: SmokeResult) -> None:
         raise AssertionError(f"write tools exposed: {result.tools}")
     if not result.rows:
         raise AssertionError("show returned no rows")
+    if result.metrics_listing is None:
+        return
     missing = [m for m in EXPECTED_METRICS if m not in result.metrics_listing]
     if missing:
         raise AssertionError(f"metrics missing from list_metrics: {missing}")
-    if not contains_number(result.metric_answer, result.warehouse_total):
+    if not contains_number(result.metric_answer or "", result.warehouse_total or 0):
         raise AssertionError(
             f"{METRIC} disagrees with count(*) = {result.warehouse_total}:\n"
             f"{result.metric_answer}"

@@ -21,12 +21,12 @@ transform = { workspace = true }
 [dependency-groups]
 dev = [
     "anyio>=4.15.1",
-    "clickhouse-connect>=1.11.0",
     "httpx>=0.28.1",
     "mcp>=1.30.0",
     "psycopg[binary]>=3.3.6",
     "pytest>=9.1.1",
     "ruff>=0.17.1",
+    "snowflake-connector-python>=5.1.0",
 ]
 
 [tool.ruff]

@@ -200,7 +200,7 @@ Doutorando em IA na USP, apaixonado por criar dev tools
 
 ---
 
-# Por que isso importa
+# Um "contexto" sobre contextos
 
 Um agente de IA que responde perguntas sobre os seus dados é tão bom quanto o
 **significado** associado a esses dados.
@@ -213,6 +213,12 @@ Um agente de IA que responde perguntas sobre os seus dados é tão bom quanto o
 **Context engineering** é dar ao agente as informações, definições e limites
 certos para que ele responda corretamente. Para dados, esse contexto é
 construído na *camada de transformação*.
+
+---
+
+<!-- _class: transition2 -->
+
+# Mas antes... o que é a camada de transformação?
 
 ---
 
@@ -407,7 +413,7 @@ A transformação agora acontece **dentro do warehouse**.
   bruta no warehouse. Mascare ou remova colunas sensíveis em uma camada de
   staging e conceda acesso em schemas, não em tabelas.
 - **O ETL ainda tem seu lugar.** Se um campo nunca pode chegar ao warehouse,
-  remova-o antes do load. Esta demo nunca carrega o IP ou o user agent brutos.
+  remova-o antes do load. 
 - **Um bom ELT exige disciplina.** Testes, descrições e responsáveis, ou o
   warehouse vira um pântano.
 
@@ -425,10 +431,11 @@ A transformação agora acontece **dentro do warehouse**.
 
 <div>
 
-- O **dbt (data build tool)** é uma ferramenta open-source que traz as boas
-práticas de engenharia de software para a transformação de dados.
+- O **dbt (data build tool)** é uma ferramenta open-source que traz as boas práticas de engenharia de software para a transformação de dados.
 
-- Recentemente ele passou para o **dbt v2**, sob a licença Apache 2.0: <https://github.com/dbt-labs/dbt>
+- Permite que transformações, testes e implementações de modelos de dados sejam implementados facilmente em sua data warehouse.
+
+- Atualmente na **v2**, sob a licença Apache 2.0: <https://github.com/dbt-labs/dbt>
 
 </div>
 
@@ -474,13 +481,13 @@ práticas de engenharia de software para a transformação de dados.
 
 ---
 
-# Um model é só um SELECT
+# Um modelo é só um SELECT
 
 ```sql
 select
     id as submission_id,
     max_by(message, updated_at) as message
-from {{ source('app', 'submissions') }}   -- uma tabela carregada pelo EL
+from {{ source('app', 'submissions') }}   -- uma tabela carregada por Extract & Load
 group by id
 ```
 
@@ -554,11 +561,36 @@ O projeto pode ser **testado** para que seus dados cheguem à produção com seg
 
 ---
 
+# Extra: Semantic Layer
+
+
+
+---
+
+<!-- _class: transition2 -->
+
+# Hora da demonstração!
+
+---
+
+<!-- _class: media -->
+
+# Hora da demonstração!
+
+<div class="media-frame">
+  <img class="only-screen" src="./images/nervous.gif"
+       alt="Uma pessoa bem nervosa suando muito" />
+  <img class="only-print" src="./images/nervous.png"
+       alt="Uma pessoa bem nervosa suando muito" />
+</div>
+
+---
+
 <!-- _class: diagram -->
 
-# Hora de codar
+# Hora da demonstração
 
-O repositório de exemplo: <https://github.com/danielbdias/ai-context-with-dbt>
+Repositório de exemplo: <https://github.com/danielbdias/ai-context-with-dbt>
 
 <div class="mermaid">
 flowchart LR
@@ -571,8 +603,6 @@ flowchart LR
   marts --> mcp["dbt MCP<br/>Claude"]
 </div>
 
-Tudo roda por meio do `task` (`task --list`).
-
 <!--
 Executar antes da palestra (Docker, cerca de 6 GB de RAM): task setup, up, seed,
 el, dbt:build, dashboard, mcp:build.
@@ -580,7 +610,7 @@ el, dbt:build, dashboard, mcp:build.
 
 ---
 
-# Hora de codar: sources e models
+# Sources e models
 
 - **Source**: `transform/dbt/models/staging/_sources.yml` declara
   `raw.submissions`, com freshness (warn após 24h) e descrições.
@@ -596,7 +626,7 @@ depois task el && task dbt:build. Opcional: task dbt:docs para ver o lineage em
 
 ---
 
-# Hora de codar: regras de negócio e testes
+# Regras de negócio e testes
 
 - **Mudar uma regra**: edite `seeds/browser_family_map.csv`, rode
   `task dbt:build`, e os gráficos mudam. Sem retrabalho no pipeline.
@@ -608,7 +638,7 @@ depois task el && task dbt:build. Opcional: task dbt:docs para ver o lineage em
 
 ---
 
-# Hora de codar: o dbt como contexto do agente
+# dbt como contexto do agente
 
 - Todo model e coluna tem uma **descrição**, garantida por
   `task dbt:coverage`. Os marts informam seu grain e uma query de exemplo.
@@ -625,7 +655,7 @@ Plano B: task mcp:smoke.
 
 ---
 
-# Hora de codar: uma definição para todos os agentes
+# Uma definição para todos os agentes
 
 - As métricas ficam em `marts/_marts.yml`, ao lado do model que descrevem, por
   exemplo `mobile_share` (a razão entre `mobile_submissions` e
@@ -647,6 +677,12 @@ chamada de query_metrics. Depois pedir um número que nenhuma métrica define,
 para mostrar o fallback para show. Precisa da dbt platform
 (docs/semantic-layer.md).
 -->
+
+---
+
+<!-- _class: transition2 -->
+
+# Recapitulando...
 
 ---
 

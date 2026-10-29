@@ -73,6 +73,55 @@ style: |
     max-width: 100%;
     object-fit: contain;
   }
+  /* The image takes the space left under the title and is contained in it, so
+     it can never overflow the slide. */
+  section.thanks {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    column-gap: 2rem;
+    align-content: start;
+    text-align: center;
+  }
+  section.thanks h1 {
+    grid-column: 1 / -1;
+  }
+  section.thanks p:has(> img:only-child) {
+    margin: 0;
+    align-self: center;
+  }
+  section.thanks img {
+    width: 100%;
+    max-height: 440px;
+    object-fit: contain;
+  }
+  section.thanks div {
+    align-self: center;
+  }
+  section.centered {
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+  }
+  section.centered p:has(> img:only-child) {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+  }
+  section.centered img {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  section.centered.shrink img {
+    width: 90%;
+    height: 90%;
+  }
 ---
 
 <script type="module">
@@ -266,6 +315,8 @@ flowchart LR
 
 ---
 
+<!-- _class: centered shrink -->
+
 # Enter ELT!
 
 ![](./images/etl-vs-elt.png)
@@ -325,34 +376,51 @@ Recently it moved to **dbt v2**, under the Apache 2.0 license: <https://github.c
 
 ---
 
+<!-- _class: centered shrink -->
+
 # How dbt interacts with the data ecosystem
 
 ![](./images/dbt-in-data-space.png)
 
 ---
 
+<!-- _class: split -->
+
 # How is the transformation done?
+
+<div>
 
 Transformation in dbt is structured as a project with source code in SQL, YAML
 and Python.
 
-<!-- Image: dbt project structure -->
+</div>
+
 ![](./images/dbt-project-structure.png)
 
 ---
 
+<!-- _class: split -->
+
 # How is the transformation done?
+
+<div>
 
 Transformation in dbt is structured as a project with source code in SQL, YAML
 and Python.
 
 The tables loaded by the Extract & Load step are declared as **sources**.
 
+</div>
+
 ![](./images/dbt-sources.png)
 
 ---
 
+<!-- _class: split -->
+
 # How is the transformation done?
+
+<div>
 
 Transformation in dbt is structured as a project with source code in SQL, YAML
 and Python.
@@ -361,11 +429,17 @@ The tables loaded by the Extract & Load step are declared as **sources**.
 
 Sources are then exposed through **models**, written as *SQL selects*.
 
+</div>
+
 ![](./images/dbt-models.png)
 
 ---
 
+<!-- _class: split -->
+
 # How is the transformation done?
+
+<div>
 
 Transformation in dbt is structured as a project with source code in SQL, YAML
 and Python.
@@ -376,6 +450,8 @@ Sources are then exposed through **models**, written as *SQL selects*.
 
 With those models we can structure the **business rules** of the transformation
 and change them easily when needed.
+
+</div>
 
 ![](./images/dbt-business-rules.png)
 
@@ -398,6 +474,8 @@ The project can be **tested** so your data ships to production safely.
 ![](./images/dbt-tests.png)
 
 ---
+
+<!-- _class: centered shrink -->
 
 # ELT run with dbt
 
@@ -482,11 +560,18 @@ ask it to read staging or raw to show ACCESS_DENIED. Fallback: task mcp:smoke.
 
 ---
 
+<!-- _class: thanks -->
+
 # Thank you!
+
+![dbt QR code](./images/qr-code-dbt.png)
+
+<div>
 
 getdbt.com
 
 @danielbdias
 
-![](./images/qr-code-dbt.png)
-![](./images/qr-code-personal.png)
+</div>
+
+![LinkedIn QR code](./images/qr-code-personal.png)

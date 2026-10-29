@@ -22,6 +22,7 @@ style: |
   }
   section li {
     font-size: 27px;
+    margin-bottom: 0.6em;
   }
   section.split {
     display: grid;
@@ -219,9 +220,9 @@ and limits to answer correctly. For data, that context is built in the
 
 # A challenge: data changes at a hospital
 
-We have an ETL process that extracts and streams data into the hospital's data
+- We have an ETL process that extracts and streams data into the hospital's data
 lake. That lets the analysts produce strategic reports.
-**The process works perfectly!**
+- **The process works perfectly!**
 
 <div class="mermaid">
 flowchart LR
@@ -247,7 +248,7 @@ flowchart LR
 
 # A challenge: data changes at a hospital
 
-A regulator recently asked for additional data in those reports, including
+- A regulator recently asked for additional data in those reports, including
 traceable **Personally Identifiable Information (PII)**.
 
 <div class="mermaid">
@@ -289,9 +290,7 @@ flowchart LR
 
 # Friction points in ETL
 
-Because the transformation is coupled to the extraction, we have to build
-separate transformation routines just for the new data, and spend days or weeks
-running the job.
+Because the transformation is coupled to the extraction, we have to build separate transformation routines just for the new data, and spend days or weeks running the job.
 
 <div class="mermaid">
 flowchart LR
@@ -332,11 +331,9 @@ flowchart LR
 
 # Thinking about ETL
 
-- ETL is a process optimized for loading and structuring data before it reaches
-the data warehouse.
+- ETL is a process optimized for loading and structuring data before it reaches the data warehouse.
 
-- But it can be inflexible in some scenarios, creating more work for the data
-team.
+- But it can be inflexible in some scenarios, creating more work for the data team.
 
 ---
 
@@ -453,8 +450,7 @@ engineering best practices to data transformation.
 
 <div>
 
-Transformation in dbt is structured as a project with source code in SQL, YAML
-and Python.
+- Transformation in dbt is structured as a project with source code in SQL, YAML and Python.
 
 </div>
 
@@ -468,10 +464,9 @@ and Python.
 
 <div>
 
-Transformation in dbt is structured as a project with source code in SQL, YAML
-and Python.
+- Transformation in dbt is structured as a project with source code in SQL, YAML and Python.
 
-The tables loaded by the Extract & Load step are declared as **sources**.
+- The tables loaded by the Extract & Load step are declared as **sources**.
 
 </div>
 
@@ -501,12 +496,11 @@ group by id
 
 <div>
 
-Transformation in dbt is structured as a project with source code in SQL, YAML
-and Python.
+- Transformation in dbt is structured as a project with source code in SQL, YAML and Python.
 
-The tables loaded by the Extract & Load step are declared as **sources**.
+- The tables loaded by the Extract & Load step are declared as **sources**.
 
-Sources are then exposed through **models**, written as *SQL selects*.
+- Sources are then exposed through **models**, written as *SQL selects*.
 
 </div>
 
@@ -520,15 +514,13 @@ Sources are then exposed through **models**, written as *SQL selects*.
 
 <div>
 
-Transformation in dbt is structured as a project with source code in SQL, YAML
-and Python.
+- Transformation in dbt is structured as a project with source code in SQL, YAML and Python.
 
-The tables loaded by the Extract & Load step are declared as **sources**.
+- The tables loaded by the Extract & Load step are declared as **sources**.
 
-Sources are then exposed through **models**, written as *SQL selects*.
+- Sources are then exposed through **models**, written as *SQL selects*.
 
-With those models we can structure the **business rules** of the transformation
-and change them easily when needed.
+- With those models we can structure the **business rules** of the transformation and change them easily when needed.
 
 </div>
 
@@ -554,7 +546,7 @@ The project can be **tested** so your data ships to production safely.
 
 ---
 
-<!-- _class: fitted shrink -->
+<!-- _class: fitted -->
 
 # ELT run with dbt
 
@@ -705,7 +697,7 @@ descriptions, and the platform dependency (Snowflake, dbt platform).
 
 <div>
 
-getdbt.com
+[getdbt.com](https://getdbt.com)
 
 @danielbdias
 

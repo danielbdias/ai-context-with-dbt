@@ -599,6 +599,12 @@ charts:
 
 ---
 
+# Extra: dbt Charts
+
+![](./images/dbt-charts.png)
+
+---
+
 <!-- _class: transition2 -->
 
 # Hora da demonstração!
@@ -780,8 +786,8 @@ descrições e a dependência de plataforma (Snowflake, dbt platform).
 
 ---
 
-<!-- _class: transition2 -->
+<!-- _class: transition2 fitted -->
 
 # Feedback
 
-![](./images/qr-avaliacao-de-data-ingestion-a-context-engineering-construind.png)
+![](./images/qr-avaliacao.png)

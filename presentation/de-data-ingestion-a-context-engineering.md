@@ -579,6 +579,26 @@ metrics:
 
 ---
 
+# Extra: dbt Charts
+
+- **dbt Charts**: dashboards definidos como código. Cada board é um arquivo
+  YAML com queries e gráficos, versionado no git junto com o projeto dbt.
+- As queries usam `ref()` para ler os marts, então o dashboard segue o mesmo
+  lineage, os mesmos testes e as mesmas permissões do resto do projeto.
+- O `dct serve` renderiza cada board em uma página web (`/overview/`, `/words/`).
+
+```yaml
+queries:
+  top_words:
+    sql: SELECT display_word, frequency FROM {{ ref('mart_word_frequencies') }}
+charts:
+  top_words:
+    query: top_words
+    type: bar
+```
+
+---
+
 <!-- _class: transition2 -->
 
 # Hora da demonstração!

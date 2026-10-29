@@ -646,6 +646,14 @@ Executar antes da palestra (Docker, cerca de 6 GB de RAM): task setup, up, seed,
 el, dbt:build, dashboard, mcp:build.
 -->
 
+--- 
+
+<!-- _class: fitted -->
+
+# A aplicação
+
+![](./images/app-ui.png)
+
 ---
 
 # Sources e models

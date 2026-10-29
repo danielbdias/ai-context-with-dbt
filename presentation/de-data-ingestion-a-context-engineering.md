@@ -563,7 +563,19 @@ O projeto pode ser **testado** para que seus dados cheguem à produção com seg
 
 # Extra: Semantic Layer
 
+- **Semantic Layer**: um lugar único onde as métricas do negócio são definidas
+  uma vez, em código, e reutilizadas por BI, apps e agentes de IA.
+- **MetricFlow**: o motor do dbt que lê essas definições e gera o SQL correto
+  para cada pergunta, com os joins, filtros e agregações certos.
+- Resultado: `mobile_share` significa a mesma coisa em qualquer lugar.
 
+```yaml
+metrics:
+  - name: mobile_share
+    type: ratio
+    numerator: mobile_submissions
+    denominator: submissions_count
+```
 
 ---
 

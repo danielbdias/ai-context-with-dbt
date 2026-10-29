@@ -1,16 +1,37 @@
 ---
 marp: true
+theme: turing
 title: "From data ingestion to context engineering"
 description: "Building reliable AI agent contexts with dbt"
 author: Daniel Dias
 paginate: true
 style: |
+  /* The Turing theme sets list text to pale yellow in a font that may not
+     load, which is unreadable on white. Keep the theme but fix the lists. */
+  section,
+  section ul,
+  section ol,
+  section li {
+    --list-item-color: #494545;
+    color: #494545;
+  }
+  section li,
+  section ul,
+  section ol {
+    font-family: 'Open Sans', sans-serif;
+  }
+  section li {
+    font-size: 27px;
+  }
   section.split {
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto 1fr;
     column-gap: 2rem;
     align-content: start;
+  }
+  section.split p {
+    font-size: 25px;
   }
   section.split h1 {
     grid-column: 1 / -1;
@@ -98,12 +119,12 @@ style: |
   section.thanks div {
     align-self: center;
   }
-  section.centered {
+  section.fitted {
     display: flex;
     flex-direction: column;
     text-align: center;
   }
-  section.centered p:has(> img:only-child) {
+  section.fitted p:has(> img:only-child) {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
@@ -111,14 +132,14 @@ style: |
     justify-content: center;
     margin: 0;
   }
-  section.centered img {
+  section.fitted img {
     width: auto;
     height: auto;
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
   }
-  section.centered.shrink img {
+  section.fitted.shrink img {
     width: 90%;
     height: 90%;
   }
@@ -144,9 +165,13 @@ style: |
   });
 </script>
 
+<!-- _class: titlepage -->
+
 # From data ingestion to context engineering
 
-Building reliable AI agent contexts with dbt
+## Building reliable AI agent contexts with dbt
+
+### Daniel Dias
 
 ---
 
@@ -310,11 +335,13 @@ team.
 
 ---
 
+<!-- _class: transition -->
+
 # What if we flipped the paradigm?
 
 ---
 
-<!-- _class: centered shrink -->
+<!-- _class: fitted shrink -->
 
 # Enter ELT!
 
@@ -376,20 +403,28 @@ The transformation now runs **inside the warehouse**.
 
 ---
 
+<!-- _class: transition -->
+
 # Great… but what is dbt? And how does it fit in?
 
 ---
 
 # What is dbt?
 
+<div>
+
 **dbt (data build tool)** is an open-source tool that brings software
 engineering best practices to data transformation.
 
 Recently it moved to **dbt v2**, under the Apache 2.0 license: <https://github.com/dbt-labs/dbt>
 
+</div>
+
+![](./images/dbt-logo.png)
+
 ---
 
-<!-- _class: centered shrink -->
+<!-- _class: fitted shrink -->
 
 # How dbt interacts with the data ecosystem
 
@@ -504,7 +539,7 @@ The project can be **tested** so your data ships to production safely.
 
 ---
 
-<!-- _class: centered shrink -->
+<!-- _class: fitted shrink -->
 
 # ELT run with dbt
 
@@ -618,7 +653,7 @@ descriptions, and the platform dependency (Snowflake, dbt platform).
 
 ---
 
-# What to do next
+# Can I build a context for AI too?
 
 1. Pick **one domain** and load it raw with an EL tool.
 2. Build staging and marts in dbt, with tests and a description for every
@@ -640,12 +675,10 @@ descriptions, and the platform dependency (Snowflake, dbt platform).
 
 # Learn more
 
-- Visual Studio Code extension: <https://marketplace.visualstudio.com/items?itemName=dbtLabsInc.dbt>
-- dbt v2: <https://github.com/dbt-labs/dbt>
-- Documentation: <https://docs.getdbt.com/>
-- Example repo: <https://github.com/danielbdias/ai-context-with-dbt>
-- Agent guide: `docs/agent-guide.md`, Semantic Layer: `docs/semantic-layer.md`,
-  PII: `docs/pii.md` (all in the example repo)
+- **Visual Studio Code extension**: <https://marketplace.visualstudio.com/items?itemName=dbtLabsInc.dbt>
+- **dbt v2**: <https://github.com/dbt-labs/dbt>
+- **Documentation**: <https://docs.getdbt.com/>
+- **Example repo**: <https://github.com/danielbdias/ai-context-with-dbt>
 
 ---
 

@@ -179,7 +179,7 @@ tasks:
       SLIDES: '{{.SLIDES | default "from-data-ingestion-to-context-engineering.md"}}'
     cmds:
       # --allow-local-files lets the slides pull in images from presentation/.
-      - '{{.MARP}} --pdf --allow-local-files {{.SLIDES}}'
+      - '{{.MARP}} {{.SLIDES}} --pdf --allow-local-files --theme-set style'
 
   presentation:html:
     desc: "Render the presentation to a single self-contained HTML (GIFs animate)"
@@ -187,7 +187,7 @@ tasks:
       SLIDES: '{{.SLIDES | default "from-data-ingestion-to-context-engineering.md"}}'
       DECK: '{{trimSuffix ".md" .SLIDES}}.html'
     cmds:
-      - '{{.MARP}} --allow-local-files -o {{.DECK}} {{.SLIDES}}'
+      - '{{.MARP}} {{.SLIDES}} --allow-local-files -o {{.DECK}} --theme-set style'
       # Marp leaves images as paths, so fold them in to get one portable file.
       - uv run python scripts/inline_presentation_assets.py presentation/{{.DECK}}
 

@@ -169,6 +169,22 @@ PhD candidate in AI at USP, passionate about building dev tools
 
 ---
 
+# Why this matters
+
+An AI agent that answers questions about your data is only as good as the
+**meaning** attached to that data.
+
+- Without definitions, the same question gets different numbers from different
+  agents.
+- Without access rules, an agent can read what it should not.
+- Without tests, nobody notices when the answer is wrong.
+
+**Context engineering** is giving an agent the right information, definitions
+and limits to answer correctly. For data, that context is built in the
+transformation layer.
+
+---
+
 <!-- _class: diagram -->
 
 # A challenge: data changes at a hospital
@@ -215,13 +231,15 @@ flowchart LR
   end
   subgraph etl["ETL pipeline"]
     direction LR
-    extract["Extract"] --> transform["Transform ⚠️"] --> load["Load"]
+    extract["Extract"] --> transform["Transform ⚠️<br/>Must now handle PII:<br/>trace it, protect it"] --> load["Load"]
   end
   records --> extract
   accounting --> extract
   exams --> extract
   more --> extract
   load --> warehouse[("Data Warehouse")]
+  classDef warn fill:#fff3cd,stroke:#e69500,stroke-width:4px,color:#8a5a00,font-weight:bold
+  class transform warn
 </div>
 
 ---
@@ -256,14 +274,15 @@ flowchart LR
   end
   subgraph etl["ETL pipeline"]
     direction LR
-    extract["Extract"] --> transform["Transform ⚠️"] --> load["Load"]
+    extract["Extract"] --> transform["Transform ⚠️<br/>Rework for each new field:<br/>days or weeks"] --> load["Load"]
   end
   records --> extract
   accounting --> extract
   exams --> extract
   more --> extract
   load --> warehouse[("Data Warehouse")]
-  extract -- coupled: rework --> transform
+  classDef hot fill:#ffe0e0,stroke:#d00,stroke-width:4px,color:#900,font-weight:bold
+  class transform hot
 </div>
 
 ---
@@ -288,26 +307,6 @@ the data warehouse.
 
 - But it can be inflexible in some scenarios, creating more work for the data
 team.
-
-<div class="mermaid">
-flowchart LR
-  subgraph sources["Sources"]
-    direction TB
-    records["Patient records"]
-    accounting["Accounting data between<br/>health plans and the hospital"]
-    exams["Local databases with<br/>exam results"]
-    more["…"]
-  end
-  subgraph etl["ETL pipeline"]
-    direction LR
-    extract["Extract"] --> transform["Transform"] --> load["Load"]
-  end
-  records --> extract
-  accounting --> extract
-  exams --> extract
-  more --> extract
-  load --> warehouse[("Data Warehouse")]
-</div>
 
 ---
 
@@ -363,6 +362,20 @@ The transformation now runs **inside the warehouse**.
 
 ---
 
+# ELT is not free
+
+- **Compute cost moves to the warehouse.** Watch credits, and keep models
+  incremental where data is large.
+- **Raw data lands first.** For the hospital, that means raw PII sits in the
+  warehouse. Mask or drop sensitive columns in a staging layer, and grant
+  access on schemas, not tables.
+- **ETL still has a place.** If a field must never reach the warehouse, remove
+  it before the load. This demo never loads the raw IP or user agent.
+- **Good ELT needs discipline.** Tests, descriptions and ownership, or the
+  warehouse becomes a swamp.
+
+---
+
 # Great… but what is dbt? And how does it fit in?
 
 ---
@@ -413,6 +426,22 @@ The tables loaded by the Extract & Load step are declared as **sources**.
 </div>
 
 ![](./images/dbt-sources.png)
+
+---
+
+# A model is just a SELECT
+
+```sql
+select
+    id as submission_id,
+    max_by(message, updated_at) as message
+from {{ source('app', 'submissions') }}   -- a table loaded by EL
+group by id
+```
+
+- `source()` points to a raw table. `ref()` points to another model or seed.
+- dbt builds the dependency graph from them and runs models in order.
+- The file name becomes the table name in the warehouse.
 
 ---
 
@@ -513,7 +542,7 @@ dbt:build, dashboard, mcp:build.
 
 - **Source**: `transform/dbt/models/staging/_sources.yml` declares
   `raw.submissions`, with freshness (warn after 24h) and descriptions.
-- **Model**: `stg_app__submissions.sql` deduplicates with `argMax` and maps
+- **Model**: `stg_app__submissions.sql` deduplicates with `max_by` and maps
   browsers and OSes through seeds, with `Other` as the fallback.
 
 <!--
@@ -551,12 +580,72 @@ ask it to read staging or raw to show ACCESS_DENIED. Fallback: task mcp:smoke.
 
 ---
 
+# Coding time: one definition for every agent
+
+- Metrics live in `marts/_marts.yml`, next to the model they describe, for
+  example `mobile_share` (a ratio of `mobile_submissions` to
+  `submissions_count`).
+- The Semantic Layer (MetricFlow) writes the SQL, so two agents asking for
+  `mobile_share` get the same answer.
+- Agents call `list_metrics` and `query_metrics` first. They fall back to
+  `show` on a mart only when no metric fits.
+
+```json
+{"metrics": ["submissions_count"],
+ "group_by": [{"name": "submission__browser", "type": "dimension"}],
+ "limit": 3}
+```
+
+<!--
+Live: ask Claude "what is the mobile share by month?" and show the
+query_metrics call. Then ask for a number no metric defines, to show the
+fallback to show. Needs the dbt platform (docs/semantic-layer.md).
+-->
+
+---
+
+# What changes for the team
+
+| Before | With ELT, dbt and context |
+|---|---|
+| New field means a new pipeline | New field means a new SQL model |
+| Metric defined in each report | Metric defined once, in git |
+| Agent guesses from table names | Agent reads descriptions and metrics |
+| Access fixed per tool | Access fixed in grants, in one place |
+
+**Trade-offs to plan for:** warehouse credits, the effort of writing
+descriptions, and the platform dependency (Snowflake, dbt platform).
+
+---
+
+# What to do next
+
+1. Pick **one domain** and load it raw with an EL tool.
+2. Build staging and marts in dbt, with tests and a description for every
+   column.
+3. Define the 3 to 5 metrics people argue about, in the Semantic Layer.
+4. Give a read-only agent the marts and nothing else, then check its answers
+   against a report you trust.
+
+---
+
+# Takeaways
+
+- **ELT** makes change cheap, because transformation lives in the warehouse.
+- **dbt** makes that logic reviewable, tested and documented.
+- **Descriptions, metrics and grants** are the context that makes an agent's
+  answers trustworthy.
+
+---
+
 # Learn more
 
 - Visual Studio Code extension: <https://marketplace.visualstudio.com/items?itemName=dbtLabsInc.dbt>
 - dbt v2: <https://github.com/dbt-labs/dbt>
 - Documentation: <https://docs.getdbt.com/>
 - Example repo: <https://github.com/danielbdias/ai-context-with-dbt>
+- Agent guide: `docs/agent-guide.md`, Semantic Layer: `docs/semantic-layer.md`,
+  PII: `docs/pii.md` (all in the example repo)
 
 ---
 

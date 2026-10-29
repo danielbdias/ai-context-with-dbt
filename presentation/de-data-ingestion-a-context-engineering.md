@@ -777,3 +777,11 @@ descrições e a dependência de plataforma (Snowflake, dbt platform).
 </div>
 
 ![QR code do LinkedIn](./images/qr-code-personal.png)
+
+---
+
+<!-- _class: transition2 -->
+
+# Feedback
+
+![](./images/qr-avaliacao-de-data-ingestion-a-context-engineering-construind.png)

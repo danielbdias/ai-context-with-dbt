@@ -601,6 +601,12 @@ charts:
 
 ---
 
+# Extra: dbt Charts
+
+![](./images/dbt-charts.png)
+
+---
+
 <!-- _class: transition2 -->
 
 # Demo time!

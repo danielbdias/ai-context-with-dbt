@@ -30,6 +30,13 @@ style: |
     column-gap: 2rem;
     align-content: start;
   }
+  /* The theme prints "page/total". Show only the page number. */
+  section::after {
+    content: attr(data-marpit-pagination);
+  }
+  section p.source {
+    font-size: 14px;
+  }
   section.split p {
     font-size: 25px;
   }
@@ -171,8 +178,6 @@ style: |
 
 ## Building reliable AI agent contexts with dbt
 
-### Daniel Dias
-
 ---
 
 <!-- _class: split -->
@@ -206,7 +211,7 @@ An AI agent that answers questions about your data is only as good as the
 
 **Context engineering** is giving an agent the right information, definitions
 and limits to answer correctly. For data, that context is built in the
-transformation layer.
+*transformation layer*.
 
 ---
 
@@ -347,7 +352,7 @@ team.
 
 ![](./images/etl-vs-elt.png)
 
-Source: <https://www.dio.me/articles/a-importancia-do-elt-e-etl-no-processo-de-engenharia-de-dados>
+<p class="source">Source: <a href="https://www.dio.me/articles/a-importancia-do-elt-e-etl-no-processo-de-engenharia-de-dados">https://www.dio.me/articles/a-importancia-do-elt-e-etl-no-processo-de-engenharia-de-dados</a></p>
 
 ---
 
@@ -380,12 +385,20 @@ The transformation now runs **inside the warehouse**.
 
 ---
 
+<!-- _class: split -->
+
 # How can ELT help you?
+
+<div>
 
 - Flexible data transformation
 - Lower cost and processing time
 - Easier data auditing and governance
 - Better scalability and performance
+
+</div>
+
+![](./images/etl-can-help-you.png)
 
 ---
 
@@ -409,14 +422,16 @@ The transformation now runs **inside the warehouse**.
 
 ---
 
+<!-- _class: split -->
+
 # What is dbt?
 
 <div>
 
-**dbt (data build tool)** is an open-source tool that brings software
+- **dbt (data build tool)** is an open-source tool that brings software
 engineering best practices to data transformation.
 
-Recently it moved to **dbt v2**, under the Apache 2.0 license: <https://github.com/dbt-labs/dbt>
+- Recently it moved to **dbt v2**, under the Apache 2.0 license: <https://github.com/dbt-labs/dbt>
 
 </div>
 

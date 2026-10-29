@@ -726,6 +726,22 @@ para mostrar o fallback para show. Precisa da dbt platform
 
 ---
 
+<!-- _class: fitted -->
+
+# Da Semantic Layer para a IA
+
+![](./images/mcp-response.png)
+
+---
+
+<!-- _class: fitted -->
+
+# Das tranformações para Insights
+
+![](./images/dbt-charts.png)
+
+---
+
 <!-- _class: transition2 -->
 
 # Recapitulando...

@@ -1,5 +1,7 @@
 # ai-context-with-dbt
 
+**English** | [Português (Brasil)](README.pt-br.md)
+
 A Dockerized ELT demo that AI agents can query, with a Semantic Layer:
 
 Postgres app -> dlt -> Snowflake `RAW` -> dbt v2 `STAGING` and `MARTS` -> dbt

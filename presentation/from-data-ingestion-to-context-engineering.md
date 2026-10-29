@@ -200,7 +200,7 @@ PhD candidate in AI at USP, passionate about building dev tools
 
 ---
 
-# Why this matters
+# A "context" about contexts
 
 An AI agent that answers questions about your data is only as good as the
 **meaning** attached to that data.
@@ -213,6 +213,12 @@ An AI agent that answers questions about your data is only as good as the
 **Context engineering** is giving an agent the right information, definitions
 and limits to answer correctly. For data, that context is built in the
 *transformation layer*.
+
+---
+
+<!-- _class: transition2 -->
+
+# But first... what is the transformation layer?
 
 ---
 
@@ -337,7 +343,7 @@ flowchart LR
 
 ---
 
-<!-- _class: transition -->
+<!-- _class: transition2 -->
 
 # What if we flipped the paradigm?
 
@@ -407,13 +413,13 @@ The transformation now runs **inside the warehouse**.
   warehouse. Mask or drop sensitive columns in a staging layer, and grant
   access on schemas, not tables.
 - **ETL still has a place.** If a field must never reach the warehouse, remove
-  it before the load. This demo never loads the raw IP or user agent.
+  it before the load.
 - **Good ELT needs discipline.** Tests, descriptions and ownership, or the
   warehouse becomes a swamp.
 
 ---
 
-<!-- _class: transition -->
+<!-- _class: transition2 -->
 
 # Great… but what is dbt? And how does it fit in?
 
@@ -428,7 +434,10 @@ The transformation now runs **inside the warehouse**.
 - **dbt (data build tool)** is an open-source tool that brings software
 engineering best practices to data transformation.
 
-- Recently it moved to **dbt v2**, under the Apache 2.0 license: <https://github.com/dbt-labs/dbt>
+- It lets you implement transformations, tests and data model deployments
+easily in your data warehouse.
+
+- Currently on **v2**, under the Apache 2.0 license: <https://github.com/dbt-labs/dbt>
 
 </div>
 
@@ -554,11 +563,68 @@ The project can be **tested** so your data ships to production safely.
 
 ---
 
+# Extra: Semantic Layer
+
+- **Semantic Layer**: a single place where business metrics are defined once,
+  in code, and reused by BI tools, apps and AI agents.
+- **MetricFlow**: the dbt engine that reads those definitions and generates the
+  right SQL for each question, with the correct joins, filters and aggregations.
+- Result: `mobile_share` means the same thing everywhere.
+
+```yaml
+metrics:
+  - name: mobile_share
+    type: ratio
+    numerator: mobile_submissions
+    denominator: submissions_count
+```
+
+---
+
+# Extra: dbt Charts
+
+- **dbt Charts**: dashboards defined as code. Each board is a YAML file with
+  queries and charts, versioned in git alongside the dbt project.
+- Queries use `ref()` to read the marts, so the dashboard follows the same
+  lineage, tests and permissions as the rest of the project.
+- `dct serve` renders each board as a web page (`/overview/`, `/words/`).
+
+```yaml
+queries:
+  top_words:
+    sql: SELECT display_word, frequency FROM {{ ref('mart_word_frequencies') }}
+charts:
+  top_words:
+    query: top_words
+    type: bar
+```
+
+---
+
+<!-- _class: transition2 -->
+
+# Demo time!
+
+---
+
+<!-- _class: media -->
+
+# Demo time!
+
+<div class="media-frame">
+  <img class="only-screen" src="./images/nervous.gif"
+       alt="A very nervous person sweating a lot" />
+  <img class="only-print" src="./images/nervous.png"
+       alt="A very nervous person sweating a lot" />
+</div>
+
+---
+
 <!-- _class: diagram -->
 
-# Coding time
+# Demo time
 
-The example repo: <https://github.com/danielbdias/ai-context-with-dbt>
+Example repo: <https://github.com/danielbdias/ai-context-with-dbt>
 
 <div class="mermaid">
 flowchart LR
@@ -571,8 +637,6 @@ flowchart LR
   marts --> mcp["dbt MCP<br/>Claude"]
 </div>
 
-Everything runs through `task` (`task --list`).
-
 <!--
 Pre-run before the talk (Docker, about 6 GB RAM): task setup, up, seed, el,
 dbt:build, dashboard, mcp:build.
@@ -580,7 +644,7 @@ dbt:build, dashboard, mcp:build.
 
 ---
 
-# Coding time: sources and models
+# Sources and models
 
 - **Source**: `transform/dbt/models/staging/_sources.yml` declares
   `raw.submissions`, with freshness (warn after 24h) and descriptions.
@@ -594,7 +658,7 @@ task el && task dbt:build. Optional: task dbt:docs for lineage on :8081.
 
 ---
 
-# Coding time: business rules and tests
+# Business rules and tests
 
 - **Change a rule**: edit `seeds/browser_family_map.csv`, run
   `task dbt:build`, and the charts change. No pipeline rework.
@@ -606,7 +670,7 @@ task el && task dbt:build. Optional: task dbt:docs for lineage on :8081.
 
 ---
 
-# Coding time: dbt as the agent's context
+# dbt as the agent's context
 
 - Every model and column has a **description**, enforced by
   `task dbt:coverage`. Marts state their grain and an example query.
@@ -622,7 +686,7 @@ ask it to read staging or raw to show ACCESS_DENIED. Fallback: task mcp:smoke.
 
 ---
 
-# Coding time: one definition for every agent
+# One definition for every agent
 
 - Metrics live in `marts/_marts.yml`, next to the model they describe, for
   example `mobile_share` (a ratio of `mobile_submissions` to
@@ -643,6 +707,12 @@ Live: ask Claude "what is the mobile share by month?" and show the
 query_metrics call. Then ask for a number no metric defines, to show the
 fallback to show. Needs the dbt platform (docs/semantic-layer.md).
 -->
+
+---
+
+<!-- _class: transition2 -->
+
+# Recapping...
 
 ---
 

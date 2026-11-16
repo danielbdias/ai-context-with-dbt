@@ -736,7 +736,7 @@ para mostrar o fallback para show. Precisa da dbt platform
 
 <!-- _class: fitted -->
 
-# Das tranformações para Insights
+# Das transformações para Insights
 
 ![](./images/dbt-charts.png)
 

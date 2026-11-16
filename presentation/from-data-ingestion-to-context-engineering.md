@@ -650,6 +650,14 @@ dbt:build, dashboard, mcp:build.
 
 ---
 
+<!-- _class: fitted -->
+
+# The application
+
+![](./images/app-ui.png)
+
+---
+
 # Sources and models
 
 - **Source**: `transform/dbt/models/staging/_sources.yml` declares
@@ -713,6 +721,22 @@ Live: ask Claude "what is the mobile share by month?" and show the
 query_metrics call. Then ask for a number no metric defines, to show the
 fallback to show. Needs the dbt platform (docs/semantic-layer.md).
 -->
+
+---
+
+<!-- _class: fitted -->
+
+# From the Semantic Layer to AI
+
+![](./images/mcp-response.png)
+
+---
+
+<!-- _class: fitted -->
+
+# From transformations to insights
+
+![](./images/dbt-charts.png)
 
 ---
 
